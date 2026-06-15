@@ -235,16 +235,7 @@ export function SupportWidget({ user }: { user: User }) {
                     </div>
                   </motion.a>
 
-                  <div className="grid grid-cols-2 gap-3">
-                    <motion.a
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                      href="sms:+8801700000000"
-                      className="bg-white border border-slate-100 shadow-[0_4px_20px_rgb(0,0,0,0.03)] p-4 rounded-3xl flex flex-col items-center justify-center gap-2 hover:bg-slate-50 transition-colors"
-                    >
-                      <MessageSquare size={24} className="text-indigo-600 mb-1" />
-                      <span className="font-bold text-slate-800 text-[13px]">এসএমএস করুন</span>
-                    </motion.a>
+                  <div className="grid grid-cols-1 gap-3">
                     <motion.a
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
@@ -348,7 +339,7 @@ export function SupportWidget({ user }: { user: User }) {
                                  <Bot size={14} />
                               </div>
                             )}
-                            <div className={`max-w-[78%] px-4 py-3 shadow-[0_2px_8px_rgb(0,0,0,0.04)] ${isUser ? 'bg-gradient-to-br from-[#0088cc] to-[#0077b3] text-white rounded-[20px] rounded-br-sm' : 'bg-white border border-slate-100 text-slate-800 rounded-[20px] rounded-bl-sm'}`}>
+                            <div className={`max-w-[78%] px-4 py-3 shadow-md ${isUser ? 'bg-indigo-600 text-white rounded-3xl rounded-br-md shadow-indigo-600/20' : 'bg-white border border-slate-100 text-slate-800 rounded-3xl rounded-bl-md shadow-slate-200/50'}`}>
                               {msg.image_url && (
                                 <div className="mb-3 rounded-xl overflow-hidden bg-black/5 ring-1 ring-black/5">
                                    <img src={msg.image_url} alt="attachment" className="w-full max-h-48 object-cover" />
@@ -357,7 +348,7 @@ export function SupportWidget({ user }: { user: User }) {
                               {msg.text && (
                                 <p className="text-[14.5px] whitespace-pre-wrap leading-relaxed">{msg.text}</p>
                               )}
-                              <div className={`text-[9px] mt-1.5 font-bold tracking-wider uppercase ${isUser ? 'text-white/70' : 'text-slate-400'} flex justify-end`}>
+                              <div className={`text-[9px] mt-1.5 font-bold tracking-wider uppercase ${isUser ? 'text-indigo-200' : 'text-slate-400'} flex justify-end`}>
                                  {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                               </div>
                             </div>
@@ -369,8 +360,8 @@ export function SupportWidget({ user }: { user: User }) {
                   </div>
                   
                   {/* Chat Input */}
-                  <div className="bg-white/80 backdrop-blur-md p-3 border-t border-slate-100 flex items-end gap-2 shadow-[0_-4px_20px_rgb(0,0,0,0.02)] relative z-20">
-                    <label className="p-3 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 rounded-2xl cursor-pointer transition-colors shrink-0">
+                  <div className="bg-white p-3 border-t border-slate-100 flex items-end gap-2 shadow-[0_-10px_30px_rgb(0,0,0,0.03)] relative z-20">
+                    <label className="p-3 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-2xl cursor-pointer transition-colors shrink-0">
                       <ImageIcon size={22} />
                       <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} disabled={uploading} />
                     </label>
@@ -384,16 +375,16 @@ export function SupportWidget({ user }: { user: User }) {
                         }
                       }}
                       placeholder={uploading ? "Uploading image..." : "Type your message..."}
-                      className="flex-1 max-h-32 min-h-[48px] bg-slate-100/80 border-transparent rounded-2xl px-4 py-3.5 text-[15px] focus:outline-none focus:bg-white focus:ring-2 focus:ring-[#0088cc]/20 focus:border-[#0088cc]/20 transition-all resize-none shadow-inner"
+                      className="flex-1 max-h-32 min-h-[48px] bg-slate-50 border border-slate-100 rounded-2xl px-4 py-3.5 text-[14px] focus:outline-none focus:bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500/20 transition-all resize-none shadow-sm"
                       rows={1}
                       disabled={uploading}
                     />
                     <button 
                       onClick={handleSend}
                       disabled={!text.trim() || uploading}
-                      className="p-3.5 bg-gradient-to-br from-[#0088cc] to-[#0077b3] text-white rounded-2xl disabled:opacity-50 shrink-0 hover:shadow-lg hover:shadow-[#0088cc]/20 transition-all active:scale-95"
+                      className="p-3.5 bg-indigo-600 text-white rounded-2xl disabled:opacity-50 shrink-0 shadow-lg shadow-indigo-600/20 hover:bg-indigo-700 transition-all active:scale-95"
                     >
-                      <Send size={20} className="translate-x-0.5 -translate-y-0.5" />
+                      <Send size={20} className="translate-x-0.5" />
                     </button>
                   </div>
                 </div>

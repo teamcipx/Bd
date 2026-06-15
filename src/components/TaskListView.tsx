@@ -68,11 +68,18 @@ export function TaskListView({ taskType, categoryTitle, user, onBack }: TaskList
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="pb-8">
-      <div className="bg-primary px-4 py-4 sticky top-0 z-20 shadow-sm flex items-center gap-3 text-white">
-        <button onClick={onBack} className="p-2 hover:bg-black/10 rounded-lg transition-colors">
-          <ArrowLeft size={24} />
-        </button>
-        <h1 className="text-xl font-bold">{categoryTitle}</h1>
+      <div className="bg-primary px-4 py-4 sticky top-0 z-20 shadow-sm flex items-center justify-between text-white">
+        <div className="flex items-center gap-3">
+          <button onClick={onBack} className="p-2 hover:bg-black/10 rounded-lg transition-colors">
+            <ArrowLeft size={24} />
+          </button>
+          <h1 className="text-xl font-bold">{categoryTitle}</h1>
+        </div>
+        {taskType === 'premium' && (
+           <span className="bg-amber-400 text-amber-900 border border-amber-300 px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider shadow-sm flex items-center gap-1">
+             99+ Available
+           </span>
+        )}
       </div>
 
       <div className="max-w-md mx-auto px-4 py-6 space-y-4">
@@ -86,12 +93,12 @@ export function TaskListView({ taskType, categoryTitle, user, onBack }: TaskList
             <motion.div 
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="py-20 flex flex-col items-center justify-center gap-3 text-slate-400 mt-10"
+              className="py-10 flex flex-col items-center justify-center gap-3 text-slate-400 mt-10"
             >
               <motion.div 
                 animate={{ rotate: 360 }} 
                 transition={{ repeat: Infinity, duration: 1.5, ease: 'linear' }} 
-                className="w-6 h-6 border-[3px] border-slate-200 border-t-indigo-500 rounded-full mb-2" 
+                className="w-5 h-5 border-[3px] border-slate-200 border-t-slate-400 rounded-full" 
               />
               <span className="text-xs font-black tracking-widest uppercase opacity-70">Loading....</span>
             </motion.div>

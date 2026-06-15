@@ -11,10 +11,20 @@ export function GmailTaskView({ user, onBack }: { user: User, onBack: () => void
   const [timeLeft, setTimeLeft] = useState(3600); // 1 hour in seconds
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+  const [availableCount, setAvailableCount] = useState<number | null>(null);
 
   useEffect(() => {
     checkExistingTask();
+    fetchAvailableCount();
   }, []);
+
+  const fetchAvailableCount = async () => {
+    const { count } = await supabase
+      .from('gmail_tasks')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'available');
+    setAvailableCount(count);
+  };
 
   useEffect(() => {
     let timer: number;
@@ -193,6 +203,11 @@ export function GmailTaskView({ user, onBack }: { user: User, onBack: () => void
                   <PlayCircle size={36} className="-rotate-3" />
                </div>
                <h2 className="text-2xl font-black text-slate-800 tracking-tight mb-3">জিমেইল তৈরি করুন</h2>
+               {availableCount !== null && (
+                 <div className="bg-indigo-50 text-indigo-600 inline-block px-4 py-1.5 rounded-full text-sm font-bold border border-indigo-100 shadow-sm mb-2">
+                   {availableCount} Tasks Available
+                 </div>
+               )}
                <div className="text-left text-[13px] text-slate-600 space-y-2 mb-8 bg-slate-50 p-4 rounded-xl border border-slate-100 mt-4 mx-auto max-w-[300px]">
                   <p className="font-bold text-slate-800 mb-2 border-b border-slate-200 pb-2">কাজের নিয়মাবলি:</p>
                   <ul className="list-decimal pl-4 space-y-2 font-medium">

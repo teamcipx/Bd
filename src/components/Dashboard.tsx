@@ -20,6 +20,8 @@ import { KYCView } from './KYCView';
 import { TutorialView } from './TutorialView';
 import toast from 'react-hot-toast';
 
+import { OnboardingView } from './OnboardingView';
+
 interface DashboardProps {
   user: User;
   onLogout: () => void;
@@ -27,6 +29,8 @@ interface DashboardProps {
 }
 
 export function Dashboard({ user, onLogout, setUser }: DashboardProps) {
+  const [showOnboarding, setShowOnboarding] = useState(() => !localStorage.getItem(`bdpay_onboarding_${user.id}`));
+  const [isBanned, setIsBanned] = useState(false);
   const [canCheckIn, setCanCheckIn] = useState(true);
   const [checkInMsg, setCheckInMsg] = useState('');
   const [isUpdating, setIsUpdating] = useState(false);
@@ -71,6 +75,11 @@ export function Dashboard({ user, onLogout, setUser }: DashboardProps) {
   const [taskCounts, setTaskCounts] = useState<Record<string, number>>({});
 
   const isAdmin = user.gmail === 'admin@gmail.com';
+  
+  let totalAvailableTasks = 0;
+  for (const count of Object.values(taskCounts)) {
+    totalAvailableTasks += Number(count) || 0;
+  }
 
   useEffect(() => {
     // Check for popup setting once on mount
@@ -122,6 +131,59 @@ export function Dashboard({ user, onLogout, setUser }: DashboardProps) {
   }, []);
 
   useEffect(() => {
+    // Realtime Notifications
+    const channel = supabase.channel('realtime-notifs')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'support_chats', filter: `user_id=eq.${user.id}` },
+        (payload) => {
+          if (payload.new.sender_type === 'admin') {
+            toast.success('সাপোর্ট থেকে নতুন মেসেজ এসেছে!', { duration: 4000, icon: '💬' });
+            setUnreadNotifCount(prev => prev + 1);
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'submissions', filter: `user_id=eq.${user.id}` },
+        (payload) => {
+          if (payload.new.status === 'approved') {
+            toast.success('আপনার একটি কাজ এপ্রুভ হয়েছে!', { duration: 4000, icon: '✅' });
+            setUnreadNotifCount(prev => prev + 1);
+          } else if (payload.new.status === 'rejected') {
+            toast.error('আপনার একটি কাজ রিজেক্ট হয়েছে!', { duration: 4000, icon: '❌' });
+            setUnreadNotifCount(prev => prev + 1);
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'withdrawals', filter: `user_id=eq.${user.id}` },
+        (payload) => {
+          if (payload.new.status === 'approved') {
+            toast.success('আপনার উইথড্র রিকোয়েস্ট এপ্রুভ হয়েছে!', { duration: 5000, icon: '💸' });
+            setUnreadNotifCount(prev => prev + 1);
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'recharges', filter: `user_id=eq.${user.id}` },
+        (payload) => {
+          if (payload.new.status === 'approved') {
+            toast.success('আপনার রিচার্জ রিকোয়েস্ট সফল হয়েছে!', { duration: 5000, icon: '📱' });
+            setUnreadNotifCount(prev => prev + 1);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user.id]);
+
+  useEffect(() => {
     const fetchNotifications = async () => {
       try {
         await supabase.rpc('auto_process_pending_tasks', { p_user_id: user.id });
@@ -161,9 +223,10 @@ export function Dashboard({ user, onLogout, setUser }: DashboardProps) {
         let isKycFlag = false;
         if (profile) {
           if (profile.is_banned) {
-            alert('Your account has been banned. Please contact support.');
-            onLogout();
+            setIsBanned(true);
             return;
+          } else {
+            setIsBanned(false);
           }
           setTotalReferrals(profile.total_referrals || 0);
           isProFlag = !!profile.is_pro;
@@ -335,6 +398,33 @@ export function Dashboard({ user, onLogout, setUser }: DashboardProps) {
     return <GmailTaskView user={user} onBack={() => setIsGmailView(false)} />;
   }
 
+  if (isBanned) {
+    return (
+      <div className="min-h-screen bg-red-600 flex flex-col items-center justify-center p-6 text-center text-white">
+        <ShieldAlert size={64} className="text-red-200 mb-6" />
+        <h1 className="text-3xl font-black mb-3">একাউন্ট ব্লক করা হয়েছে</h1>
+        <p className="text-red-100 font-medium mb-8 text-sm max-w-xs leading-relaxed">
+          আমাদের নিয়মনীতি অমান্য করার কারণে আপনার একাউন্টটি সাময়িকভাবে বন্ধ করা হয়েছে। দয়া করে সাপোর্টে যোগাযোগ করুন।
+        </p>
+        <button 
+          onClick={onLogout}
+          className="bg-white text-red-600 font-bold px-8 py-3 rounded-xl shadow-lg active:scale-95 transition-transform"
+        >
+          লগআউট করুন
+        </button>
+      </div>
+    );
+  }
+
+  if (showOnboarding) {
+    return (
+      <OnboardingView onComplete={() => {
+        localStorage.setItem(`bdpay_onboarding_${user.id}`, 'true');
+        setShowOnboarding(false);
+      }} />
+    );
+  }
+
   // If a task category is selected, render the TaskListView instead of the main dashboard
   if (activeTaskCategory) {
     return (
@@ -346,6 +436,10 @@ export function Dashboard({ user, onLogout, setUser }: DashboardProps) {
       />
     );
   }
+
+  const themeBg = user.isPro ? 'bg-gradient-to-r from-slate-900 via-amber-900 to-slate-900' : 'bg-primary';
+  const themeText = user.isPro ? 'text-amber-500' : 'text-primary';
+  const themeBgLight = user.isPro ? 'bg-amber-500/10' : 'bg-primary/10';
 
   return (
     <div className="min-h-screen bg-[#FAFAFA] flex flex-col">
@@ -480,7 +574,7 @@ export function Dashboard({ user, onLogout, setUser }: DashboardProps) {
               transition={{ type: 'spring', damping: 25, stiffness: 200 }}
               className="fixed top-0 left-0 bottom-0 w-3/4 max-w-sm bg-white z-50 flex flex-col shadow-2xl"
             >
-              <div className="bg-primary px-6 py-8 text-white relative">
+              <div className={`${themeBg} px-6 py-8 text-white relative transition-colors`}>
                 <button 
                   onClick={() => setIsMenuOpen(false)}
                   className="absolute top-4 right-4 p-2 bg-white/10 rounded-full hover:bg-white/20 transition-colors"
@@ -491,30 +585,30 @@ export function Dashboard({ user, onLogout, setUser }: DashboardProps) {
                   {user.name.charAt(0).toUpperCase()}
                 </div>
                 <h2 className="text-xl font-bold">{user.name}</h2>
-                <p className="text-emerald-100 text-sm opacity-90">{user.number}</p>
+                <p className="text-white/80 text-sm opacity-90">{user.number}</p>
               </div>
 
               <div className="flex-1 p-4 space-y-2 overflow-y-auto">
-                <button onClick={() => { setActiveTab('home'); setIsMenuOpen(false); }} className={`w-full flex items-center gap-3 p-3 rounded-xl font-medium transition-colors ${activeTab === 'home' ? 'bg-primary/10 text-primary' : 'text-slate-700 hover:bg-slate-50'}`}>
-                  <Home size={20} className={activeTab === 'home' ? 'text-primary' : 'text-slate-400'} /> Dashboard
+                <button onClick={() => { setActiveTab('home'); setIsMenuOpen(false); }} className={`w-full flex items-center gap-3 p-3 rounded-xl font-medium transition-colors ${activeTab === 'home' ? `${themeBgLight} ${themeText}` : 'text-slate-700 hover:bg-slate-50'}`}>
+                  <Home size={20} className={activeTab === 'home' ? themeText : 'text-slate-400'} /> Dashboard
                 </button>
-                <button onClick={() => { setActiveTab('history'); setIsMenuOpen(false); }} className={`w-full flex items-center gap-3 p-3 rounded-xl font-medium transition-colors ${activeTab === 'history' ? 'bg-primary/10 text-primary' : 'text-slate-700 hover:bg-slate-50'}`}>
-                  <Clock size={20} className={activeTab === 'history' ? 'text-primary' : 'text-slate-400'} /> History
+                <button onClick={() => { setActiveTab('history'); setIsMenuOpen(false); }} className={`w-full flex items-center gap-3 p-3 rounded-xl font-medium transition-colors ${activeTab === 'history' ? `${themeBgLight} ${themeText}` : 'text-slate-700 hover:bg-slate-50'}`}>
+                  <Clock size={20} className={activeTab === 'history' ? themeText : 'text-slate-400'} /> History
                 </button>
-                <button onClick={() => { setActiveTab('tutorial'); setIsMenuOpen(false); }} className={`w-full flex items-center gap-3 p-3 rounded-xl font-medium transition-colors ${activeTab === 'tutorial' ? 'bg-primary/10 text-primary' : 'text-slate-700 hover:bg-slate-50'}`}>
-                  <HelpCircle size={20} className={activeTab === 'tutorial' ? 'text-primary' : 'text-slate-400'} /> Tutorial
+                <button onClick={() => { setActiveTab('tutorial'); setIsMenuOpen(false); }} className={`w-full flex items-center gap-3 p-3 rounded-xl font-medium transition-colors ${activeTab === 'tutorial' ? `${themeBgLight} ${themeText}` : 'text-slate-700 hover:bg-slate-50'}`}>
+                  <HelpCircle size={20} className={activeTab === 'tutorial' ? themeText : 'text-slate-400'} /> Tutorial
                 </button>
-                <button onClick={() => { setActiveTab('withdraw'); setIsMenuOpen(false); }} className={`w-full flex items-center gap-3 p-3 rounded-xl font-medium transition-colors ${activeTab === 'withdraw' ? 'bg-primary/10 text-primary' : 'text-slate-700 hover:bg-slate-50'}`}>
-                  <Coins size={20} className={activeTab === 'withdraw' ? 'text-primary' : 'text-slate-400'} /> Withdraw
+                <button onClick={() => { setActiveTab('withdraw'); setIsMenuOpen(false); }} className={`w-full flex items-center gap-3 p-3 rounded-xl font-medium transition-colors ${activeTab === 'withdraw' ? `${themeBgLight} ${themeText}` : 'text-slate-700 hover:bg-slate-50'}`}>
+                  <Coins size={20} className={activeTab === 'withdraw' ? themeText : 'text-slate-400'} /> Withdraw
                 </button>
-                <button onClick={() => { setActiveTab('account'); setIsMenuOpen(false); }} className={`w-full flex items-center gap-3 p-3 rounded-xl font-medium transition-colors ${activeTab === 'account' ? 'bg-primary/10 text-primary' : 'text-slate-700 hover:bg-slate-50'}`}>
-                  <UserIcon size={20} className={activeTab === 'account' ? 'text-primary' : 'text-slate-400'} /> Profile
+                <button onClick={() => { setActiveTab('account'); setIsMenuOpen(false); }} className={`w-full flex items-center gap-3 p-3 rounded-xl font-medium transition-colors ${activeTab === 'account' ? `${themeBgLight} ${themeText}` : 'text-slate-700 hover:bg-slate-50'}`}>
+                  <UserIcon size={20} className={activeTab === 'account' ? themeText : 'text-slate-400'} /> Profile
                 </button>
-                <button onClick={() => { setActiveTab('reviews'); setIsMenuOpen(false); }} className={`w-full flex items-center gap-3 p-3 rounded-xl font-medium transition-colors ${activeTab === 'reviews' ? 'bg-primary/10 text-primary' : 'text-slate-700 hover:bg-slate-50'}`}>
-                  <Star size={20} className={activeTab === 'reviews' ? 'text-primary' : 'text-slate-400'} /> Reviews
+                <button onClick={() => { setActiveTab('reviews'); setIsMenuOpen(false); }} className={`w-full flex items-center gap-3 p-3 rounded-xl font-medium transition-colors ${activeTab === 'reviews' ? `${themeBgLight} ${themeText}` : 'text-slate-700 hover:bg-slate-50'}`}>
+                  <Star size={20} className={activeTab === 'reviews' ? themeText : 'text-slate-400'} /> Reviews
                 </button>
-                <button onClick={() => { setActiveTab('updates'); setIsMenuOpen(false); }} className={`w-full flex items-center gap-3 p-3 rounded-xl font-medium transition-colors ${activeTab === 'updates' ? 'bg-primary/10 text-primary' : 'text-slate-700 hover:bg-slate-50'}`}>
-                  <Bell size={20} className={activeTab === 'updates' ? 'text-primary' : 'text-slate-400'} /> Updates
+                <button onClick={() => { setActiveTab('updates'); setIsMenuOpen(false); }} className={`w-full flex items-center gap-3 p-3 rounded-xl font-medium transition-colors ${activeTab === 'updates' ? `${themeBgLight} ${themeText}` : 'text-slate-700 hover:bg-slate-50'}`}>
+                  <Bell size={20} className={activeTab === 'updates' ? themeText : 'text-slate-400'} /> Updates
                 </button>
                 <button onClick={() => { setActiveTab('bdpro'); setIsMenuOpen(false); }} className={`w-full flex items-center gap-3 p-3 rounded-xl font-medium transition-colors ${activeTab === 'bdpro' ? 'bg-amber-100 text-amber-600' : 'text-slate-700 hover:bg-slate-50'}`}>
                   <Crown size={20} className={activeTab === 'bdpro' ? 'text-amber-500' : 'text-slate-400'} /> BD Pro
@@ -541,7 +635,7 @@ export function Dashboard({ user, onLogout, setUser }: DashboardProps) {
       </AnimatePresence>
 
       {/* Top Header */}
-      <div className="bg-primary px-4 py-4 sticky top-0 z-20 shadow-sm flex items-center justify-between text-white">
+      <div className={`${themeBg} px-4 py-4 sticky top-0 z-20 shadow-sm flex items-center justify-between text-white transition-colors`}>
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 font-extrabold bg-white/20 rounded-lg flex items-center justify-center text-sm shadow-inner">
             B
@@ -659,6 +753,24 @@ export function Dashboard({ user, onLogout, setUser }: DashboardProps) {
                     </div>
                   </div>
                 </div>
+              </motion.div>
+
+              {/* Total Available Tasks Header Info */}
+              <motion.div 
+                initial={{ y: 20, opacity: 0 }} 
+                animate={{ y: 0, opacity: 1 }} 
+                transition={{ delay: 0.05 }}
+                className="bg-indigo-50 border border-indigo-100 rounded-2xl p-3 flex gap-3 items-center justify-between shadow-sm"
+              >
+                 <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 shrink-0 bg-white text-indigo-500 rounded-[12px] flex items-center justify-center shadow-sm">
+                       <CheckCircle2 size={20} />
+                    </div>
+                    <div>
+                       <p className="text-[10px] font-bold tracking-wider uppercase text-slate-500 mb-0.5">Total Tasks Available</p>
+                       <p className="font-black text-indigo-700 text-sm">{totalAvailableTasks > 0 ? totalAvailableTasks : 'Loading...'}</p>
+                    </div>
+                 </div>
               </motion.div>
 
               {/* Daily Check-In & Streak */}

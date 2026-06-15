@@ -13,11 +13,19 @@ CREATE TABLE IF NOT EXISTS tasks (
 CREATE TABLE IF NOT EXISTS submissions (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID REFERENCES auth.users(id),
-  task_id UUID REFERENCES tasks(id),
+  task_id UUID REFERENCES tasks(id) ON DELETE CASCADE,
   screenshot_url TEXT NOT NULL,
   status TEXT DEFAULT 'pending', 
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+-- Fix task deletion reference problem
+ALTER TABLE submissions
+DROP CONSTRAINT IF EXISTS submissions_task_id_fkey,
+ADD CONSTRAINT submissions_task_id_fkey
+   FOREIGN KEY (task_id)
+   REFERENCES tasks(id)
+   ON DELETE CASCADE;
 
 CREATE TABLE IF NOT EXISTS imgbb_keys (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -310,6 +318,13 @@ ALTER TABLE device_fingerprints DISABLE ROW LEVEL SECURITY;
 
 ALTER TABLE submissions ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();
 
+-- Enable Realtime
+BEGIN;
+  DROP PUBLICATION IF EXISTS supabase_realtime;
+  CREATE PUBLICATION supabase_realtime;
+COMMIT;
+ALTER PUBLICATION supabase_realtime ADD TABLE support_chats, submissions, withdrawals, recharges;
+
 CREATE OR REPLACE FUNCTION auto_process_pending_tasks(
   p_user_id UUID,
   p_minimum_hours INTEGER DEFAULT 1
@@ -436,5 +451,31 @@ BEGIN
     WHERE id = v_user_id;
   END IF;
 
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+
+CREATE OR REPLACE FUNCTION admin_get_user_balance(p_user_id UUID)
+RETURNS NUMERIC AS $$
+DECLARE
+  v_bal NUMERIC;
+BEGIN
+  SELECT COALESCE((raw_user_meta_data->>'balance')::numeric, 0) INTO v_bal
+  FROM auth.users WHERE id = p_user_id;
+  RETURN v_bal;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+
+CREATE OR REPLACE FUNCTION admin_update_user_balance(p_user_id UUID, p_amount NUMERIC)
+RETURNS void AS $$
+BEGIN
+  UPDATE auth.users
+  SET raw_user_meta_data = jsonb_set(
+    COALESCE(raw_user_meta_data, '{}'::jsonb),
+    '{balance}',
+    to_jsonb(COALESCE((raw_user_meta_data->>'balance')::numeric, 0) + p_amount)
+  )
+  WHERE id = p_user_id;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;

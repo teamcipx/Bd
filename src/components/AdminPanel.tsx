@@ -5,9 +5,11 @@ import { TASK_LIST } from '../data';
 import { ArrowLeft, Check, X, KeySquare, Plus, Trash2 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { AdminInbox } from './AdminInbox';
+import { AdminUserDetail } from './AdminUserDetail';
 
 export function AdminPanel({ onBack }: { onBack: () => void }) {
   const [tab, setTab] = useState<'home' | 'submissions' | 'users' | 'tasks' | 'keys' | 'recharges' | 'gmail' | 'offers' | 'notify' | 'settings' | 'inbox' | 'withdrawals'>('home');
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [recharges, setRecharges] = useState<any[]>([]);
@@ -569,116 +571,77 @@ export function AdminPanel({ onBack }: { onBack: () => void }) {
 
         {/* Users Tab */}
         {tab === 'users' && (
-          <div className="space-y-4">
-            <h2 className="text-lg font-bold text-slate-800">User Management</h2>
-            <div className="mb-4">
-              <input 
-                type="text" 
-                placeholder="Search by Name, Email, Phone, or ID..." 
-                value={searchTerm}
-                onChange={e => setSearchTerm(e.target.value)}
-                className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm"
-              />
-            </div>
-            {loading ? <p className="text-slate-500">Loading...</p> : users.length === 0 ? <p className="text-slate-500">No users found.</p> : users.filter(u => {
-              const query = searchTerm.toLowerCase();
-              return (
-                (u.name && u.name.toLowerCase().includes(query)) ||
-                (u.email && u.email.toLowerCase().includes(query)) ||
-                (u.number && u.number.toLowerCase().includes(query)) ||
-                (u.user_id && u.user_id.toLowerCase().includes(query))
-              );
-            }).map(u => (
-              <div key={u.user_id} className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col gap-3 group hover:border-indigo-200 transition-colors">
-                <div className="flex items-start gap-4">
-                  <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center font-black text-lg uppercase shadow-inner shrink-0 group-hover:scale-105 transition-transform">
-                    {u.name ? u.name.substring(0, 2) : 'U'}
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="font-bold text-slate-800 flex items-center gap-2">
-                       {u.name || 'Unnamed User'} 
-                       {u.number && <span className="bg-slate-100 text-slate-500 text-[10px] px-2 py-0.5 rounded-md font-bold tracking-wide">{u.number}</span>}
-                       {u.is_banned && <span className="bg-red-100 text-red-600 text-[10px] px-2 py-0.5 rounded-md font-bold uppercase tracking-widest">Banned</span>}
-                    </h3>
-                    <p className="text-xs text-slate-500 font-medium mt-0.5">{u.email}</p>
-                    <p className="text-[10px] text-slate-400 font-mono mt-1">ID: {u.user_id}</p>
-                  </div>
-                </div>
-                <div className="flex flex-wrap gap-2 pt-3 border-t border-slate-100">
-                  <button 
-                    onClick={async () => {
-                      const amount = prompt("Enter amount to ADD to balance (use negative to deduct):");
-                      if (amount && !isNaN(Number(amount))) {
-                        // Create a fake task submission to approve
-                        const { data: subData, error: insertError } = await supabase.from('submissions').insert({
-                          user_id: u.user_id,
-                          task_id: '00000000-0000-0000-0000-000000000000', // might fail if foreign key constraint exists...
-                          screenshot_url: 'balance-adjustment',
-                          status: 'pending'
-                        }).select().single();
-                        
-                        if (insertError) {
-                          // Fallback trick for some fk errors or just use existing
-                          const { data: anyTask } = await supabase.from('tasks').select('id').limit(1);
-                          if (anyTask && anyTask[0]) {
-                            const { data: validSub, error: validErr } = await supabase.from('submissions').insert({
-                              user_id: u.user_id,
-                              task_id: anyTask[0].id,
-                              screenshot_url: 'balance-adjustment',
-                              status: 'pending'
-                            }).select().single();
-                            if (validSub) {
-                              const { error } = await supabase.rpc('approve_task_submission', { p_submission_id: validSub.id, p_user_id: u.user_id, p_reward: Number(amount) });
-                              if (!error) alert('Balance adjusted successfully!'); else alert('Failed to adjust.');
-                            } else {
-                              alert('Failed: ' + validErr?.message);
-                            }
-                          } else {
-                             alert('No tasks found to create dummy submission.');
-                          }
-                        } else if (subData) {
-                          const { error } = await supabase.rpc('approve_task_submission', { p_submission_id: subData.id, p_user_id: u.user_id, p_reward: Number(amount) });
-                          if (!error) alert('Balance adjusted successfully!'); else alert('Failed to adjust.');
-                        }
-                      }
-                    }} 
-                    className="bg-emerald-50 text-emerald-700 py-1.5 px-3 rounded-lg text-xs font-bold hover:bg-emerald-100"
-                  >
-                    Add Balance
-                  </button>
-                  <button 
-                    onClick={async () => {
-                      if (window.confirm("Ban this user?")) {
-                        const { error } = await supabase.from('user_profiles').update({ is_banned: true }).eq('user_id', u.user_id);
-                        if(error) alert('Failed: ' + error.message); else alert('Banned!');
-                        loadUsers();
-                      }
-                    }} 
-                    className="bg-orange-50 text-orange-700 py-1.5 px-3 rounded-lg text-xs font-bold hover:bg-orange-100"
-                  >
-                    Ban
-                  </button>
-                  <button 
-                    onClick={async () => {
-                      if (window.confirm("Unban this user?")) {
-                        const { error } = await supabase.from('user_profiles').update({ is_banned: false }).eq('user_id', u.user_id);
-                        if(error) alert('Failed: ' + error.message); else alert('Unbanned!');
-                        loadUsers();
-                      }
-                    }} 
-                    className="bg-blue-50 text-blue-700 py-1.5 px-3 rounded-lg text-xs font-bold hover:bg-blue-100"
-                  >
-                    Unban
-                  </button>
-                  <button onClick={async () => {
-                      alert('Delete user requires admin api. But we can hide them by banning for now.');
-                    }} className="bg-red-50 text-red-700 py-1.5 px-3 rounded-lg text-xs font-bold hover:bg-red-100">
-                    Delete
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
+          selectedUserId ? (
+             <AdminUserDetail userId={selectedUserId} onBack={() => setSelectedUserId(null)} />
+          ) : (
+             <div className="space-y-4">
+               <h2 className="text-lg font-bold text-slate-800">User Management</h2>
+               <div className="mb-4">
+                 <input 
+                   type="text" 
+                   placeholder="Search by Name, Email, Phone, or ID..." 
+                   value={searchTerm}
+                   onChange={e => setSearchTerm(e.target.value)}
+                   className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm"
+                 />
+               </div>
+               {loading ? <p className="text-slate-500">Loading...</p> : users.length === 0 ? <p className="text-slate-500">No users found.</p> : users.filter(u => {
+                 const query = searchTerm.toLowerCase();
+                 return (
+                   (u.name && u.name.toLowerCase().includes(query)) ||
+                   (u.email && u.email.toLowerCase().includes(query)) ||
+                   (u.number && u.number.toLowerCase().includes(query)) ||
+                   (u.user_id && u.user_id.toLowerCase().includes(query))
+                 );
+               }).map(u => (
+                 <div key={u.user_id} className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col gap-3 group hover:border-indigo-200 transition-colors">
+                   <div className="flex items-start gap-4">
+                     <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center font-black text-lg uppercase shadow-inner shrink-0 group-hover:scale-105 transition-transform">
+                       {u.name ? u.name.substring(0, 2) : 'U'}
+                     </div>
+                     <div className="flex-1">
+                       <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                          {u.name || 'Unnamed User'} 
+                          {u.number && <span className="bg-slate-100 text-slate-500 text-[10px] px-2 py-0.5 rounded-md font-bold tracking-wide">{u.number}</span>}
+                          {u.is_banned && <span className="bg-red-100 text-red-600 text-[10px] px-2 py-0.5 rounded-md font-bold uppercase tracking-widest">Banned</span>}
+                       </h3>
+                       <p className="text-xs text-slate-500 font-medium mt-0.5">{u.email}</p>
+                       <p className="text-[10px] text-slate-400 font-mono mt-1">ID: {u.user_id}</p>
+                     </div>
+                   </div>
+                   <div className="flex flex-wrap gap-2 pt-3 border-t border-slate-100">
+                     <button onClick={() => setSelectedUserId(u.user_id)} className="bg-indigo-600 text-white font-bold text-xs px-3 py-1.5 rounded flex items-center gap-1.5 shadow-sm hover:bg-indigo-700 transition">
+                       View Details
+                     </button>
+                     <button 
+                       onClick={async () => {
+                         if (window.confirm("Ban this user?")) {
+                           const { error } = await supabase.from('user_profiles').update({ is_banned: true }).eq('user_id', u.user_id);
+                           if(error) alert('Failed: ' + error.message); else alert('Banned!');
+                           loadUsers();
+                         }
+                       }} 
+                       className="bg-orange-50 text-orange-700 py-1.5 px-3 rounded-lg text-xs font-bold hover:bg-orange-100"
+                     >
+                       Ban
+                     </button>
+                     <button 
+                       onClick={async () => {
+                         if (window.confirm("Unban this user?")) {
+                           const { error } = await supabase.from('user_profiles').update({ is_banned: false }).eq('user_id', u.user_id);
+                           if(error) alert('Failed: ' + error.message); else alert('Unbanned!');
+                           loadUsers();
+                         }
+                       }} 
+                       className="bg-blue-50 text-blue-700 py-1.5 px-3 rounded-lg text-xs font-bold hover:bg-blue-100"
+                     >
+                       Unban
+                     </button>
+                   </div>
+                 </div>
+               ))}
+             </div>
+          )
         )}
 
         {/* Submissions Tab */}

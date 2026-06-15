@@ -56,14 +56,14 @@ export function TaskSubmitView({ task, user, onBack, onSuccess }: { task: TaskIt
           } else {
             const errCode = imgbbData.error?.code;
             const errMsg = imgbbData.error?.message || '';
-            // Only deactivate key if it is genuinely invalid or quota exceeded (Code 100/102 or mentions API key)
-            if (errCode === 100 || errCode === 102 || errMsg.toLowerCase().includes('api key') || errMsg.toLowerCase().includes('limit')) {
-               console.warn('Imgbb API key exhausted/invalid:', k.api_key);
-               await supabase.from('imgbb_keys').update({ is_active: false }).eq('id', k.id);
-               continue; // Try next key
+            // We removed aggressive auto-disabling. Check if it's explicitly an Invalid API Key
+            if (errCode === 100 || errMsg.toLowerCase().includes('invalid api key')) {
+               console.warn('Imgbb API key is invalid:', k.api_key);
+               // Do not auto-delete/deactivate according to user's request. Just try the next one.
+               continue; 
             } else {
-               // Client-side image issue (e.g. file too large, invalid format) -> Stop and show user
-               throw new Error(errMsg || 'Image upload failed. Ensure it is a valid format and under 32MB.');
+               // Client-side image issue (e.g. file too large, rate limit, etc.) -> Stop and show user
+               throw new Error(errMsg || 'Image upload failed. Please ensure file is valid format and size.');
             }
           }
         } catch(e: any) {
@@ -71,7 +71,7 @@ export function TaskSubmitView({ task, user, onBack, onSuccess }: { task: TaskIt
           if (e.message && !e.message.toLowerCase().includes('fetch')) {
              throw e;
           }
-          // Network errors during fetch - we can just let it try the next key
+          // Network errors during fetch - try next key
           console.error('Network error with key', k.api_key, e);
         }
       }
