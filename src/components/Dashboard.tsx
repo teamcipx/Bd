@@ -565,7 +565,7 @@ export function Dashboard({ user, onLogout, setUser }: DashboardProps) {
             </div>
           )}
           <button 
-            onClick={handleOpenNotifications}
+            onClick={() => handleTabChange('updates')}
             className="p-2 hover:bg-black/10 rounded-lg transition-colors relative"
           >
             <Bell size={22} />

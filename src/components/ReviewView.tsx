@@ -17,7 +17,11 @@ export function ReviewView({ user }: { user: User }) {
 
   const loadReviews = async () => {
     setLoading(true);
-    let query = supabase.from('reviews').select('*').order('created_at', { ascending: false }).eq('user_id', user.id);
+    let query = supabase.from('reviews').select('*').order('created_at', { ascending: false });
+    
+    if (!isAdmin) {
+      query = query.or(`is_admin.eq.true,user_id.eq.${user.id}`);
+    }
     
     const { data } = await query;
     if (data) setReviews(data);
