@@ -755,23 +755,7 @@ export function Dashboard({ user, onLogout, setUser }: DashboardProps) {
                 </div>
               </motion.div>
 
-              {/* Total Available Tasks Header Info */}
-              <motion.div 
-                initial={{ y: 20, opacity: 0 }} 
-                animate={{ y: 0, opacity: 1 }} 
-                transition={{ delay: 0.05 }}
-                className="bg-indigo-50 border border-indigo-100 rounded-2xl p-3 flex gap-3 items-center justify-between shadow-sm"
-              >
-                 <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 shrink-0 bg-white text-indigo-500 rounded-[12px] flex items-center justify-center shadow-sm">
-                       <CheckCircle2 size={20} />
-                    </div>
-                    <div>
-                       <p className="text-[10px] font-bold tracking-wider uppercase text-slate-500 mb-0.5">Total Tasks Available</p>
-                       <p className="font-black text-indigo-700 text-sm">{totalAvailableTasks > 0 ? totalAvailableTasks : 'Loading...'}</p>
-                    </div>
-                 </div>
-              </motion.div>
+              {/* Removed Total Available Tasks Header Info */}
 
               {/* Daily Check-In & Streak */}
               {canCheckIn && (
@@ -838,6 +822,11 @@ export function Dashboard({ user, onLogout, setUser }: DashboardProps) {
               <div className="pt-0">
                 <div className="flex items-center justify-between mb-3 px-1">
                   <h2 className="text-xl font-black text-slate-800">Earning Options</h2>
+                  {totalAvailableTasks > 0 && (
+                    <span className="bg-indigo-100 text-indigo-700 text-[10px] font-black px-2 py-1 rounded-md uppercase tracking-wider">
+                      {totalAvailableTasks} Tasks Available
+                    </span>
+                  )}
                 </div>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                   {regularTasks.map((task, idx) => (

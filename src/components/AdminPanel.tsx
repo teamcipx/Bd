@@ -12,6 +12,7 @@ export function AdminPanel({ onBack }: { onBack: () => void }) {
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   
   const [submissions, setSubmissions] = useState<Submission[]>([]);
+  const [uploadingImage, setUploadingImage] = useState(false);
   const [recharges, setRecharges] = useState<any[]>([]);
   const [withdrawals, setWithdrawals] = useState<any[]>([]);
   const [gmailTasks, setGmailTasks] = useState<any[]>([]);
@@ -33,6 +34,7 @@ export function AdminPanel({ onBack }: { onBack: () => void }) {
     description: '',
     link: '',
     tutorial_url: '',
+    image_url: '',
     reward: '5',
     task_type: 'fb-reels'
   });
@@ -59,6 +61,45 @@ export function AdminPanel({ onBack }: { onBack: () => void }) {
     if (tab === 'offers') loadOffers();
     if (tab === 'settings') loadSettings();
   }, [tab]);
+
+  const uploadImageToImgbb = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingImage(true);
+    try {
+      const { data: keys } = await supabase.from('imgbb_keys').select('api_key').eq('is_active', true);
+      if (!keys || keys.length === 0) throw new Error('No active ImgBB keys found to upload image.');
+      
+      let imgSuccess = false;
+      let uploadedUrl = '';
+
+      for (const k of keys) {
+        try {
+          const formData = new FormData();
+          formData.append('image', file);
+          const res = await fetch(`https://api.imgbb.com/1/upload?key=${k.api_key}`, { method: 'POST', body: formData });
+          const imgbbData = await res.json();
+          if (imgbbData.success) {
+            uploadedUrl = imgbbData.data.url;
+            imgSuccess = true;
+            break;
+          }
+        } catch (err) {
+          console.error(err);
+        }
+      }
+
+      if (imgSuccess && uploadedUrl) {
+        setNewTaskForm({...newTaskForm, image_url: uploadedUrl});
+      } else {
+        alert('Image upload failed. Please check ImgBB API keys.');
+      }
+    } catch (err: any) {
+      alert(err.message || 'Image upload failed');
+    }
+    setUploadingImage(false);
+  };
 
   // --------------- Withdrawals Logic ---------------
   const loadWithdrawals = async () => {
@@ -387,6 +428,7 @@ export function AdminPanel({ onBack }: { onBack: () => void }) {
         description: newTaskForm.description,
         link: newTaskForm.link,
         tutorial_url: newTaskForm.tutorial_url,
+        image_url: newTaskForm.image_url,
         reward: Number(newTaskForm.reward),
         task_type: newTaskForm.task_type
       }).eq('id', editingTaskId).select();
@@ -394,7 +436,7 @@ export function AdminPanel({ onBack }: { onBack: () => void }) {
       if (data && data[0]) {
         setTasks(tasks.map(t => t.id === editingTaskId ? data[0] : t));
         setEditingTaskId(null);
-        setNewTaskForm({...newTaskForm, title: '', description: '', link: '', tutorial_url: ''});
+        setNewTaskForm({...newTaskForm, title: '', description: '', link: '', tutorial_url: '', image_url: ''});
       }
     } else {
       const { data, error } = await supabase.from('tasks').insert({
@@ -402,13 +444,14 @@ export function AdminPanel({ onBack }: { onBack: () => void }) {
         description: newTaskForm.description,
         link: newTaskForm.link,
         tutorial_url: newTaskForm.tutorial_url,
+        image_url: newTaskForm.image_url,
         reward: Number(newTaskForm.reward),
         task_type: newTaskForm.task_type
       }).select();
       
       if (data && data[0]) {
         setTasks([data[0], ...tasks]);
-        setNewTaskForm({...newTaskForm, title: '', description: '', link: '', tutorial_url: ''});
+        setNewTaskForm({...newTaskForm, title: '', description: '', link: '', tutorial_url: '', image_url: ''});
       }
     }
   };
@@ -420,6 +463,7 @@ export function AdminPanel({ onBack }: { onBack: () => void }) {
       description: task.description || '',
       link: task.link,
       tutorial_url: task.tutorial_url || '',
+      image_url: task.image_url || '',
       reward: String(task.reward),
       task_type: task.task_type
     });
@@ -429,7 +473,7 @@ export function AdminPanel({ onBack }: { onBack: () => void }) {
 
   const cancelEdit = () => {
     setEditingTaskId(null);
-    setNewTaskForm({ title: '', description: '', link: '', tutorial_url: '', reward: '5', task_type: 'fb-reels' });
+    setNewTaskForm({ title: '', description: '', link: '', tutorial_url: '', image_url: '', reward: '5', task_type: 'fb-reels' });
   };
 
   const toggleTask = async (id: string, currentStatus: boolean) => {
@@ -903,13 +947,45 @@ export function AdminPanel({ onBack }: { onBack: () => void }) {
                   <textarea value={newTaskForm.description} onChange={e => setNewTaskForm({...newTaskForm, description: e.target.value})} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm" placeholder="Task details..." />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1">Link URL</label>
-                  <input required type="url" value={newTaskForm.link} onChange={e => setNewTaskForm({...newTaskForm, link: e.target.value})} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm" placeholder="https://..." />
+                  <label className="block text-xs font-medium text-slate-500 mb-1">
+                    {newTaskForm.task_type === 'fb-post' ? 'Link URL (Optional)' : 'Link URL'}
+                  </label>
+                  <input required={newTaskForm.task_type !== 'fb-post'} type="url" value={newTaskForm.link} onChange={e => setNewTaskForm({...newTaskForm, link: e.target.value})} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm" placeholder="https://..." />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-500 mb-1">Tutorial Image/Video URL (Optional)</label>
                   <input type="url" value={newTaskForm.tutorial_url} onChange={e => setNewTaskForm({...newTaskForm, tutorial_url: e.target.value})} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm" placeholder="URL of tutorial video or image..." />
                 </div>
+                {newTaskForm.task_type === 'fb-post' && (
+                  <div>
+                    <label className="block text-xs font-medium text-slate-500 mb-1">Post Image (Required for FB Post)</label>
+                    {newTaskForm.image_url ? (
+                      <div className="relative mb-2">
+                        <img src={newTaskForm.image_url} alt="Uploaded" className="w-full h-32 object-contain rounded-lg border border-slate-200 bg-slate-50" />
+                        <button type="button" onClick={() => setNewTaskForm({...newTaskForm, image_url: ''})} className="absolute top-2 right-2 bg-red-500 text-white p-1 rounded-full hover:bg-red-600">
+                          <X size={14} />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="relative border-2 border-dashed border-slate-300 rounded-lg p-4 text-center hover:bg-slate-50 transition-colors">
+                        <input
+                           type="file"
+                           accept="image/*"
+                           onChange={uploadImageToImgbb}
+                           className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                        />
+                        {uploadingImage ? (
+                           <div className="text-indigo-600 font-medium text-sm animate-pulse">Uploading Image...</div>
+                        ) : (
+                           <div className="text-slate-500 text-sm">
+                             <Plus size={20} className="mx-auto mb-1 opacity-50" />
+                             Click to upload image via ImgBB
+                           </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
                 <div>
                   <label className="block text-xs font-medium text-slate-500 mb-1">Reward (BDT)</label>
                   <input required type="number" step="0.1" value={newTaskForm.reward} onChange={e => setNewTaskForm({...newTaskForm, reward: e.target.value})} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm" />

@@ -75,6 +75,18 @@ export function AdminUserDetail({ userId, onBack }: { userId: string, onBack: ()
     }
   };
 
+  const toggleBan = async () => {
+    if (!profile) return;
+    const isBanned = !!profile.is_banned;
+    const confirmMsg = isBanned 
+      ? "Are you sure you want to unban this user?" 
+      : "Are you sure you want to ban this user? They will not be able to use the app.";
+    if (!window.confirm(confirmMsg)) return;
+
+    await supabase.from('user_profiles').update({ is_banned: !isBanned }).eq('user_id', userId);
+    setProfile({...profile, is_banned: !isBanned});
+  };
+
   if (loading) {
      return <div className="p-8 text-center text-slate-500 font-bold">Loading user details...</div>;
   }
@@ -95,7 +107,13 @@ export function AdminUserDetail({ userId, onBack }: { userId: string, onBack: ()
                <h2 className="text-2xl font-black text-slate-800">{profile.name || 'Unnamed'}</h2>
                <p className="text-sm text-slate-500 font-mono mt-1">{userId}</p>
             </div>
-            {profile.is_pro && <span className="bg-amber-100 text-amber-700 font-black text-xs px-2 py-1 rounded-md tracking-widest uppercase">VIP / PRO</span>}
+            <div className="flex flex-col items-end gap-2">
+               {profile.is_pro && <span className="bg-amber-100 text-amber-700 font-black text-xs px-2 py-1 rounded-md tracking-widest uppercase">VIP / PRO</span>}
+               {profile.is_banned && <span className="bg-red-100 text-red-700 font-black text-xs px-2 py-1 rounded-md tracking-widest uppercase">Banned</span>}
+               <button onClick={toggleBan} className={`text-[10px] uppercase font-bold px-3 py-1 rounded-md ${profile.is_banned ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' : 'bg-red-100 text-red-700 hover:bg-red-200'}`}>
+                 {profile.is_banned ? 'Unban User' : 'Ban User'}
+               </button>
+            </div>
          </div>
          
          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">

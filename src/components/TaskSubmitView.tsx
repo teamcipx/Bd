@@ -159,49 +159,126 @@ export function TaskSubmitView({ task, user, onBack, onSuccess }: { task: TaskIt
           )}
           <p className="text-slate-500 text-sm mb-4">Click the button below to complete the task, take a screenshot, and upload it as proof.</p>
           
-          <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4 flex justify-between items-center mb-6">
-            <span className="font-medium text-indigo-900">Reward</span>
-            <span className="font-bold text-indigo-700 text-lg">৳ {Number(task.reward).toFixed(2)}</span>
-          </div>
-
-          <a 
-            href={task.link} 
-            target="_blank" 
-            rel="noopener noreferrer"
-            className="w-full bg-slate-800 text-white py-3 rounded-xl font-medium flex items-center justify-center gap-2 hover:bg-slate-700 transition-colors mb-6"
-          >
-            Open Task Link <ExternalLink size={18} />
-          </a>
-
-          {task.tutorial_url && (
-            <div className="mb-6">
-              <h3 className="font-bold text-slate-800 mb-2">Tutorial</h3>
-              {task.tutorial_url.match(/\.(jpeg|jpg|gif|png|webp)$/i) ? (
-                <img src={task.tutorial_url} alt="Task Tutorial" className="w-full rounded-xl object-contain border border-slate-200" />
-              ) : task.task_type === 'special' || /^\d+$/.test(task.tutorial_url) || task.tutorial_url.includes('facebook') || task.tutorial_url.includes('fb.watch') ? (
-                <div className="relative w-full overflow-hidden aspect-[9/16] max-w-[320px] mx-auto bg-slate-900 rounded-[24px] shadow-lg flex items-center justify-center border-4 border-slate-100 mb-2">
-                  <iframe 
-                    src={getEmbedUrl(task.tutorial_url)} 
-                    className="absolute top-0 left-0 w-full h-full bg-black/5"
-                    style={{ border: 'none', overflow: 'hidden' }}
-                    scrolling="no" 
-                    frameBorder="0" 
-                    allowFullScreen={true} 
-                    allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share"
-                    title="Task Tutorial Video"
-                  />
+          {task.task_type === 'fb-post' && (
+            <div className="bg-indigo-50/50 border border-indigo-100 rounded-xl p-5 mb-6 space-y-4">
+              <h3 className="font-bold text-slate-800 text-sm uppercase tracking-wider">Facebook Post Task</h3>
+              
+              {task.description && (
+                <div className="space-y-2">
+                  <span className="text-xs font-bold text-slate-500">1. Copy this Caption:</span>
+                  <div className="relative">
+                    <p className="bg-white p-3 rounded-lg border border-slate-200 text-sm text-slate-700 whitespace-pre-wrap">{task.description}</p>
+                    <button 
+                      onClick={() => {
+                        navigator.clipboard.writeText(task.description || '');
+                        toast.success('Caption copied!');
+                      }}
+                      className="absolute top-2 right-2 bg-indigo-100 text-indigo-700 px-2 py-1 rounded text-xs font-bold hover:bg-indigo-200"
+                    >
+                      Copy
+                    </button>
+                  </div>
                 </div>
-              ) : (
-                <a
-                  href={task.tutorial_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="block w-full bg-blue-50 text-blue-700 py-3 rounded-xl font-medium text-center border border-blue-100 hover:bg-blue-100 transition-colors"
-                >
-                  View Tutorial Video / Details
-                </a>
               )}
+
+              {task.image_url && (
+                <div className="space-y-2">
+                  <span className="text-xs font-bold text-slate-500">2. Save this Image:</span>
+                  <div className="bg-white p-2 rounded-lg border border-slate-200">
+                    <img src={task.image_url} alt="To post" className="w-full rounded-md object-contain mb-2 max-h-[300px]" />
+                    <button 
+                      onClick={async () => {
+                        try {
+                          const res = await fetch(task.image_url!);
+                          const blob = await res.blob();
+                          const url = URL.createObjectURL(blob);
+                          const a = document.createElement('a');
+                          a.href = url;
+                          a.download = `bdpay-fb-post-${Date.now()}`;
+                          document.body.appendChild(a);
+                          a.click();
+                          a.remove();
+                          URL.revokeObjectURL(url);
+                          toast.success('Image Downloaded');
+                        } catch (e) {
+                          toast.error('Could not download image. Right click/Long press to save it manually.');
+                        }
+                      }}
+                      className="w-full bg-indigo-600 text-white rounded-md py-2 font-bold text-sm flex justify-center items-center gap-2 hover:bg-indigo-700 transition"
+                    >
+                      <ImageIcon size={16} /> Download Image
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <div className="pt-2">
+                <span className="text-xs font-bold text-slate-500 block mb-2">3. Post in any Facebook Group{task.link && ':'}</span>
+                {task.link ? (
+                  <a 
+                    href={task.link} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="w-full bg-blue-600 text-white py-3 rounded-xl font-medium flex items-center justify-center gap-2 hover:bg-blue-700 transition-colors"
+                  >
+                    Open Facebook Group <ExternalLink size={18} />
+                  </a>
+                ) : (
+                  <p className="text-sm text-slate-700 bg-white p-3 rounded-xl border border-slate-200">
+                    Open Facebook and post the downloaded image with the copied caption in any active group, then take a screenshot.
+                  </p>
+                )}
+              </div>
             </div>
+          )}
+
+          {task.task_type !== 'fb-post' && (
+            <>
+              <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4 flex justify-between items-center mb-6">
+                <span className="font-medium text-indigo-900">Reward</span>
+                <span className="font-bold text-indigo-700 text-lg">৳ {Number(task.reward).toFixed(2)}</span>
+              </div>
+
+              <a 
+                href={task.link} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="w-full bg-slate-800 text-white py-3 rounded-xl font-medium flex items-center justify-center gap-2 hover:bg-slate-700 transition-colors mb-6"
+              >
+                Open Task Link <ExternalLink size={18} />
+              </a>
+
+              {task.tutorial_url && (
+                <div className="mb-6">
+                  <h3 className="font-bold text-slate-800 mb-2">Tutorial</h3>
+                  {task.tutorial_url.match(/\.(jpeg|jpg|gif|png|webp)$/i) ? (
+                    <img src={task.tutorial_url} alt="Task Tutorial" className="w-full rounded-xl object-contain border border-slate-200" />
+                  ) : task.task_type === 'special' || /^\d+$/.test(task.tutorial_url) || task.tutorial_url.includes('facebook') || task.tutorial_url.includes('fb.watch') ? (
+                    <div className="relative w-full overflow-hidden aspect-[9/16] max-w-[320px] mx-auto bg-slate-900 rounded-[24px] shadow-lg flex items-center justify-center border-4 border-slate-100 mb-2">
+                      <iframe 
+                        src={getEmbedUrl(task.tutorial_url)} 
+                        className="absolute top-0 left-0 w-full h-full bg-black/5"
+                        style={{ border: 'none', overflow: 'hidden' }}
+                        scrolling="no" 
+                        frameBorder="0" 
+                        allowFullScreen={true} 
+                        allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share"
+                        title="Task Tutorial Video"
+                      />
+                    </div>
+                  ) : (
+                    <a
+                      href={task.tutorial_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block w-full bg-blue-50 text-blue-700 py-3 rounded-xl font-medium text-center border border-blue-100 hover:bg-blue-100 transition-colors"
+                    >
+                      View Tutorial Video / Details
+                    </a>
+                  )}
+                </div>
+              )}
+            </>
           )}
 
           <hr className="border-slate-100 mb-6" />

@@ -9,10 +9,12 @@ import {
   Send, 
   Crown, 
   CreditCard, 
-  CheckSquare
+  CheckSquare,
+  FileImage
 } from 'lucide-react';
 
 export const TASK_LIST = [
+  { id: 'fb-post', title: 'ফেসবুক পোস্ট', subtitle: 'ক্যাপশন ও ছবি পোস্ট করুন', icon: FileImage, color: 'text-indigo-500', bg: 'bg-indigo-100' },
   { id: 'fb-reels', title: 'ফেসবুক রিলস ভিউ', subtitle: 'ভিডিও দেখে ইনকাম', icon: Video, color: 'text-blue-500', bg: 'bg-blue-100' },
   { id: 'fb-custom', title: 'ফেসবুক কাস্টম টাস্ক', subtitle: 'লাইক, ফলো ও শেয়ার', icon: CheckSquare, color: 'text-blue-600', bg: 'bg-blue-100' },
   { id: 'youtube', title: 'ইউটিউব টাস্ক', subtitle: 'ভিডিও ও সাবস্ক্রাইব', icon: Youtube, color: 'text-red-500', bg: 'bg-red-100' },

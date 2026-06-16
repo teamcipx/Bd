@@ -27,6 +27,7 @@ export interface TaskItem {
   description?: string;
   link: string;
   tutorial_url?: string;
+  image_url?: string;
   reward: number;
   is_active: boolean;
 }
