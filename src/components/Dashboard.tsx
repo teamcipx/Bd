@@ -29,7 +29,6 @@ interface DashboardProps {
 }
 
 export function Dashboard({ user, onLogout, setUser }: DashboardProps) {
-  const [showOnboarding, setShowOnboarding] = useState(() => !localStorage.getItem(`bdpay_onboarding_${user.id}`));
   const [isBanned, setIsBanned] = useState(false);
   const [canCheckIn, setCanCheckIn] = useState(true);
   const [checkInMsg, setCheckInMsg] = useState('');
@@ -73,6 +72,7 @@ export function Dashboard({ user, onLogout, setUser }: DashboardProps) {
   const [siteSettings, setSiteSettings] = useState<any>(null);
   const [showPopup, setShowPopup] = useState(false);
   const [taskCounts, setTaskCounts] = useState<Record<string, number>>({});
+  const [gmailAvgReward, setGmailAvgReward] = useState<number>(0);
 
   const isAdmin = user.gmail === 'admin@gmail.com';
   
@@ -106,6 +106,13 @@ export function Dashboard({ user, onLogout, setUser }: DashboardProps) {
         
         // Also fetch available gmail tasks
         const { count: gmailCount } = await supabase.from('gmail_tasks').select('*', { count: 'exact', head: true }).eq('status', 'available');
+        
+        // Fetch avg reward
+        const { data: gmailRewards } = await supabase.from('gmail_tasks').select('reward').eq('status', 'available');
+        if (gmailRewards && gmailRewards.length > 0) {
+          const sum = gmailRewards.reduce((acc, curr) => acc + (Number(curr.reward) || 0), 0);
+          setGmailAvgReward(Math.round((sum / gmailRewards.length) * 10) / 10);
+        }
 
         if (allTasks) {
           const completedTaskIds = new Set((userSubmissions || []).map(s => s.task_id));
@@ -395,7 +402,7 @@ export function Dashboard({ user, onLogout, setUser }: DashboardProps) {
   }
 
   if (isGmailView) {
-    return <GmailTaskView user={user} onBack={() => setIsGmailView(false)} />;
+    return <GmailTaskView user={user} onBack={() => setIsGmailView(false)} siteSettings={siteSettings} />;
   }
 
   if (isBanned) {
@@ -413,15 +420,6 @@ export function Dashboard({ user, onLogout, setUser }: DashboardProps) {
           লগআউট করুন
         </button>
       </div>
-    );
-  }
-
-  if (showOnboarding) {
-    return (
-      <OnboardingView onComplete={() => {
-        localStorage.setItem(`bdpay_onboarding_${user.id}`, 'true');
-        setShowOnboarding(false);
-      }} />
     );
   }
 
@@ -844,7 +842,12 @@ export function Dashboard({ user, onLogout, setUser }: DashboardProps) {
                       </div>
                       <div className="relative z-10 w-full mt-1">
                         <span className="font-extrabold text-[12px] text-slate-800 leading-snug group-hover:text-primary transition-colors flex items-center justify-between">
-                          {task.title}
+                          <span className="flex items-center gap-1">
+                            {task.title}
+                            {task.id === 'gmail' && gmailAvgReward > 0 && (
+                               <span className="text-[9px] text-emerald-600 bg-emerald-50 px-1 py-0.5 rounded border border-emerald-100">~৳{gmailAvgReward}</span>
+                            )}
+                          </span>
                           {taskCounts[task.id] !== undefined && (
                             <span className="bg-indigo-50 text-indigo-600 text-[9px] px-1.5 py-0.5 rounded font-black border border-indigo-100/50">
                               {taskCounts[task.id]}
@@ -954,7 +957,7 @@ export function Dashboard({ user, onLogout, setUser }: DashboardProps) {
         )}
 
         {activeTab === 'bdpro' && (
-          <BDProView user={user} onSubscribe={() => handleTabChange('home')} setUser={setUser} />
+          <BDProView user={user} onSubscribe={() => handleTabChange('home')} setUser={setUser} siteSettings={siteSettings} />
         )}
 
         {activeTab === 'kyc' && (
@@ -967,12 +970,12 @@ export function Dashboard({ user, onLogout, setUser }: DashboardProps) {
 
         {activeTab === 'account' && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="pb-24">
-            <div className="bg-gradient-to-br from-indigo-600 via-indigo-700 to-violet-800 pt-8 pb-16 px-6 rounded-b-[2.5rem] shadow-xl relative overflow-hidden">
+            <div className={`pt-8 pb-16 px-6 rounded-b-[2.5rem] shadow-xl relative overflow-hidden ${user.isPro ? 'bg-gradient-to-br from-amber-500 via-yellow-600 to-amber-700' : 'bg-gradient-to-br from-indigo-600 via-indigo-700 to-violet-800'}`}>
               <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -mr-20 -mt-20"></div>
               <div className="relative z-10 flex flex-col items-center">
                 <div className="w-24 h-24 bg-white/20 rounded-full mb-4 flex items-center justify-center p-1 shadow-inner backdrop-blur-md border border-white/20">
-                    <div className="w-full h-full bg-white text-indigo-600 rounded-full flex items-center justify-center">
-                        <UserIcon size={40} className="text-indigo-600" />
+                    <div className={`w-full h-full bg-white rounded-full flex items-center justify-center ${user.isPro ? 'text-amber-600' : 'text-indigo-600'}`}>
+                        <UserIcon size={40} />
                     </div>
                 </div>
                 <h2 className="text-2xl font-black text-white tracking-tight">{user.name}</h2>

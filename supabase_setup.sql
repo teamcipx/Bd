@@ -59,6 +59,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 ALTER TABLE tasks ADD COLUMN IF NOT EXISTS description TEXT;
 ALTER TABLE tasks ADD COLUMN IF NOT EXISTS tutorial_url TEXT;
 ALTER TABLE tasks ADD COLUMN IF NOT EXISTS image_url TEXT;
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS caption TEXT;
 
 CREATE TABLE IF NOT EXISTS recharges (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -171,6 +172,8 @@ CREATE TABLE IF NOT EXISTS site_settings (
 ALTER TABLE site_settings DISABLE ROW LEVEL SECURITY;
 ALTER TABLE site_settings ADD COLUMN IF NOT EXISTS global_notice TEXT;
 ALTER TABLE site_settings ADD COLUMN IF NOT EXISTS kyc_enabled BOOLEAN DEFAULT false;
+ALTER TABLE site_settings ADD COLUMN IF NOT EXISTS vip_tutorial_url TEXT;
+ALTER TABLE site_settings ADD COLUMN IF NOT EXISTS gmail_tutorial_url TEXT;
 
 ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS is_kyc_verified BOOLEAN DEFAULT false;
 
@@ -327,12 +330,12 @@ COMMIT;
 ALTER PUBLICATION supabase_realtime ADD TABLE support_chats, submissions, withdrawals, recharges;
 
 CREATE OR REPLACE FUNCTION auto_process_pending_tasks(
-  p_user_id UUID,
-  p_minimum_hours INTEGER DEFAULT 1
+  p_user_id UUID
 ) RETURNS void AS $$
 DECLARE
   sub RECORD;
   rand NUMERIC;
+  rand_hour NUMERIC;
 BEGIN
   FOR sub IN
     SELECT s.id, t.reward 
@@ -341,7 +344,8 @@ BEGIN
     WHERE s.user_id = p_user_id 
       AND s.status = 'pending'
       AND t.task_type != 'gmail'
-      AND s.created_at <= NOW() - (p_minimum_hours || ' hours')::interval
+      AND EXTRACT(EPOCH FROM (NOW() - s.created_at))/3600 >= (1 + random() * 2)
+    FOR UPDATE OF s SKIP LOCKED
   LOOP
     rand := random();
     IF rand <= 0.90 THEN
@@ -464,6 +468,35 @@ BEGIN
   SELECT COALESCE((raw_user_meta_data->>'balance')::numeric, 0) INTO v_bal
   FROM auth.users WHERE id = p_user_id;
   RETURN v_bal;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+
+CREATE OR REPLACE FUNCTION admin_get_user_referrals(p_user_id UUID)
+RETURNS TABLE (
+  id UUID,
+  referred_user_id UUID,
+  reward_amount NUMERIC,
+  created_at TIMESTAMP WITH TIME ZONE,
+  email TEXT,
+  name TEXT,
+  balance NUMERIC
+) AS $$
+BEGIN
+  RETURN QUERY
+  SELECT 
+    r.id,
+    r.referred_user_id,
+    r.reward_amount,
+    r.created_at,
+    u.email::text,
+    p.name::text,
+    COALESCE((u.raw_user_meta_data->>'balance')::numeric, 0) AS balance
+  FROM referrals r
+  JOIN auth.users u ON u.id = r.referred_user_id
+  JOIN user_profiles p ON p.user_id = r.referred_user_id
+  WHERE r.referrer_id = p_user_id
+  ORDER BY r.created_at DESC;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 

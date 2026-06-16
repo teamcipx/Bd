@@ -25,6 +25,7 @@ export interface TaskItem {
   task_type: string;
   title: string;
   description?: string;
+  caption?: string;
   link: string;
   tutorial_url?: string;
   image_url?: string;

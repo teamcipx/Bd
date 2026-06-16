@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { User } from '../types';
 import { motion } from 'motion/react';
-import { ShieldCheck, Zap, Headset, Clock, Star, Key, Shield, Crown, Gift, CheckCircle2, ChevronRight, ArrowLeft, AlertCircle, Phone, Smartphone } from 'lucide-react';
+import { ShieldCheck, Zap, Headset, Clock, Star, Key, Shield, Crown, Gift, CheckCircle2, ChevronRight, ArrowLeft, AlertCircle, Phone, Smartphone, PlayCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
-export function BDProView({ user, onSubscribe, setUser }: { user: User, onSubscribe: () => void, setUser?: (u: User) => void }) {
+export function BDProView({ user, onSubscribe, setUser, siteSettings }: { user: User, onSubscribe: () => void, setUser?: (u: User) => void, siteSettings?: any }) {
   const [step, setStep] = useState(1);
   const [paymentPhone, setPaymentPhone] = useState('');
   const [method, setMethod] = useState('');
@@ -165,6 +165,12 @@ export function BDProView({ user, onSubscribe, setUser }: { user: User, onSubscr
             <div className="bg-gradient-to-br from-indigo-900 via-indigo-800 to-violet-900 rounded-3xl p-6 shadow-2xl relative overflow-hidden border border-indigo-700/50">
               <div className="absolute top-0 right-0 w-40 h-40 bg-amber-400/20 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none"></div>
               <div className="absolute bottom-0 left-0 w-32 h-32 bg-indigo-500/30 rounded-full blur-2xl -ml-10 -mb-10 pointer-events-none"></div>
+              
+              {siteSettings?.vip_tutorial_url && (
+                <a href={siteSettings.vip_tutorial_url} target="_blank" rel="noopener noreferrer" className="absolute top-4 right-4 z-20 flex items-center gap-1 bg-white/20 hover:bg-white/30 backdrop-blur-md px-3 py-1.5 rounded-full text-xs font-bold text-white transition-colors border border-white/20">
+                  <PlayCircle size={14} /> Tutorial
+                </a>
+              )}
               
               <div className="relative z-10 flex flex-col items-center text-center">
                 <div className="w-20 h-20 bg-gradient-to-br from-amber-300 to-amber-500 rounded-2xl flex items-center justify-center shadow-lg shadow-amber-500/30 mb-4 border-2 border-amber-200">

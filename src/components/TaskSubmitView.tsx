@@ -163,14 +163,14 @@ export function TaskSubmitView({ task, user, onBack, onSuccess }: { task: TaskIt
             <div className="bg-indigo-50/50 border border-indigo-100 rounded-xl p-5 mb-6 space-y-4">
               <h3 className="font-bold text-slate-800 text-sm uppercase tracking-wider">Facebook Post Task</h3>
               
-              {task.description && (
+              {(task.caption || task.description) && (
                 <div className="space-y-2">
                   <span className="text-xs font-bold text-slate-500">1. Copy this Caption:</span>
                   <div className="relative">
-                    <p className="bg-white p-3 rounded-lg border border-slate-200 text-sm text-slate-700 whitespace-pre-wrap">{task.description}</p>
+                    <p className="bg-white p-3 rounded-lg border border-slate-200 text-sm text-slate-700 whitespace-pre-wrap">{task.caption || task.description}</p>
                     <button 
                       onClick={() => {
-                        navigator.clipboard.writeText(task.description || '');
+                        navigator.clipboard.writeText(task.caption || task.description || '');
                         toast.success('Caption copied!');
                       }}
                       className="absolute top-2 right-2 bg-indigo-100 text-indigo-700 px-2 py-1 rounded text-xs font-bold hover:bg-indigo-200"

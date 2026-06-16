@@ -35,8 +35,14 @@ export function AdminUserDetail({ userId, onBack }: { userId: string, onBack: ()
     if (subs) setSubmissions(subs);
 
     // 4. Referrals
-    const { data: refs } = await supabase.from('referrals').select('*, referred_user_id').eq('referrer_id', userId).order('created_at', { ascending: false });
-    if (refs) setReferrals(refs);
+    const { data: refsData, error: refError } = await supabase.rpc('admin_get_user_referrals', { p_user_id: userId });
+    if (!refError && refsData) {
+      setReferrals(refsData);
+    } else {
+      // Fallback if RPC is old
+      const { data: fallbackRefs } = await supabase.from('referrals').select('*, referred_user_id').eq('referrer_id', userId).order('created_at', { ascending: false });
+      if (fallbackRefs) setReferrals(fallbackRefs);
+    }
 
     // 5. Withdrawals
     const { data: withs } = await supabase.from('withdrawals').select('*').eq('user_id', userId).order('created_at', { ascending: false });
@@ -169,10 +175,14 @@ export function AdminUserDetail({ userId, onBack }: { userId: string, onBack: ()
              <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2">
                 {referrals.length === 0 ? <p className="text-sm text-slate-400">No referrals</p> : referrals.map(r => (
                   <div key={r.id} className="border-b border-slate-50 pb-2">
-                     <span className="font-mono text-xs text-slate-500">{r.referred_user_id}</span>
-                     <div className="flex justify-between mt-1">
+                     <span className="font-bold text-slate-700 text-sm">{r.name || 'Unknown User'}</span>
+                     <div className="font-mono text-xs text-slate-400 mb-1">{r.email || r.referred_user_id}</div>
+                     <div className="flex justify-between items-center bg-slate-50 p-2 rounded-lg">
                        <span className="text-[10px] text-slate-400">{new Date(r.created_at).toLocaleDateString()}</span>
-                       <span className="text-[10px] font-bold text-emerald-600">৳{r.reward_amount}</span>
+                       <div className="flex flex-col items-end">
+                         <span className="text-[10px] font-bold text-emerald-600">Reward: ৳{r.reward_amount}</span>
+                         {r.balance !== undefined && <span className="text-[10px] font-bold text-indigo-600">Cur. Bal: ৳{r.balance}</span>}
+                       </div>
                      </div>
                   </div>
                 ))}

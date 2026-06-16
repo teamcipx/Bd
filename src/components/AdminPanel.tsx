@@ -32,6 +32,7 @@ export function AdminPanel({ onBack }: { onBack: () => void }) {
   const [newTaskForm, setNewTaskForm] = useState({
     title: '',
     description: '',
+    caption: '',
     link: '',
     tutorial_url: '',
     image_url: '',
@@ -426,6 +427,7 @@ export function AdminPanel({ onBack }: { onBack: () => void }) {
       const { data, error } = await supabase.from('tasks').update({
         title: newTaskForm.title,
         description: newTaskForm.description,
+        caption: newTaskForm.caption,
         link: newTaskForm.link,
         tutorial_url: newTaskForm.tutorial_url,
         image_url: newTaskForm.image_url,
@@ -436,12 +438,13 @@ export function AdminPanel({ onBack }: { onBack: () => void }) {
       if (data && data[0]) {
         setTasks(tasks.map(t => t.id === editingTaskId ? data[0] : t));
         setEditingTaskId(null);
-        setNewTaskForm({...newTaskForm, title: '', description: '', link: '', tutorial_url: '', image_url: ''});
+        setNewTaskForm({...newTaskForm, title: '', description: '', caption: '', link: '', tutorial_url: '', image_url: ''});
       }
     } else {
       const { data, error } = await supabase.from('tasks').insert({
         title: newTaskForm.title,
         description: newTaskForm.description,
+        caption: newTaskForm.caption,
         link: newTaskForm.link,
         tutorial_url: newTaskForm.tutorial_url,
         image_url: newTaskForm.image_url,
@@ -451,7 +454,7 @@ export function AdminPanel({ onBack }: { onBack: () => void }) {
       
       if (data && data[0]) {
         setTasks([data[0], ...tasks]);
-        setNewTaskForm({...newTaskForm, title: '', description: '', link: '', tutorial_url: '', image_url: ''});
+        setNewTaskForm({...newTaskForm, title: '', description: '', caption: '', link: '', tutorial_url: '', image_url: ''});
       }
     }
   };
@@ -461,6 +464,7 @@ export function AdminPanel({ onBack }: { onBack: () => void }) {
     setNewTaskForm({
       title: task.title,
       description: task.description || '',
+      caption: task.caption || '',
       link: task.link,
       tutorial_url: task.tutorial_url || '',
       image_url: task.image_url || '',
@@ -473,7 +477,7 @@ export function AdminPanel({ onBack }: { onBack: () => void }) {
 
   const cancelEdit = () => {
     setEditingTaskId(null);
-    setNewTaskForm({ title: '', description: '', link: '', tutorial_url: '', image_url: '', reward: '5', task_type: 'fb-reels' });
+    setNewTaskForm({ title: '', description: '', caption: '', link: '', tutorial_url: '', image_url: '', reward: '5', task_type: 'fb-reels' });
   };
 
   const toggleTask = async (id: string, currentStatus: boolean) => {
@@ -946,6 +950,12 @@ export function AdminPanel({ onBack }: { onBack: () => void }) {
                   <label className="block text-xs font-medium text-slate-500 mb-1">Description (Optional)</label>
                   <textarea value={newTaskForm.description} onChange={e => setNewTaskForm({...newTaskForm, description: e.target.value})} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm" placeholder="Task details..." />
                 </div>
+                {newTaskForm.task_type === 'fb-post' && (
+                  <div>
+                    <label className="block text-xs font-medium text-slate-500 mb-1">Post Caption (To be copied by user)</label>
+                    <textarea value={newTaskForm.caption} onChange={e => setNewTaskForm({...newTaskForm, caption: e.target.value})} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm h-20" placeholder="Caption for the FB post..." />
+                  </div>
+                )}
                 <div>
                   <label className="block text-xs font-medium text-slate-500 mb-1">
                     {newTaskForm.task_type === 'fb-post' ? 'Link URL (Optional)' : 'Link URL'}
@@ -1167,6 +1177,14 @@ export function AdminPanel({ onBack }: { onBack: () => void }) {
                   <div>
                     <label className="block text-xs font-medium text-slate-500 mb-1">Tutorial (Facebook Video/Reels URL or ID)</label>
                     <input type="text" value={settings.tutorial_url || ''} onChange={e => setSettings({...settings, tutorial_url: e.target.value})} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm" placeholder="URL or ID (e.g. 123456789 or https://...)" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-500 mb-1">VIP Tutorial URL</label>
+                    <input type="text" value={settings.vip_tutorial_url || ''} onChange={e => setSettings({...settings, vip_tutorial_url: e.target.value})} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm" placeholder="Tutorial URL for VIP users" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-500 mb-1">Gmail Task Tutorial URL</label>
+                    <input type="text" value={settings.gmail_tutorial_url || ''} onChange={e => setSettings({...settings, gmail_tutorial_url: e.target.value})} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm" placeholder="Tutorial URL for Gmail Tasks" />
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-slate-500 mb-1">Review URL (App/Play Store)</label>

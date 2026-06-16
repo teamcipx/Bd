@@ -4,7 +4,7 @@ import { User } from '../types';
 import { ArrowLeft, Clock, Copy, CheckCircle2, AlertCircle, PlayCircle, Loader2 } from 'lucide-react';
 import { motion } from 'motion/react';
 
-export function GmailTaskView({ user, onBack }: { user: User, onBack: () => void }) {
+export function GmailTaskView({ user, onBack, siteSettings }: { user: User, onBack: () => void, siteSettings?: any }) {
   const [task, setTask] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -199,6 +199,11 @@ export function GmailTaskView({ user, onBack }: { user: User, onBack: () => void
              <div className="absolute top-0 right-0 w-40 h-40 bg-gradient-to-br from-indigo-50 to-emerald-50 rounded-bl-full -mr-10 -mt-10 z-0"></div>
              
              <div className="relative z-10">
+               {siteSettings?.gmail_tutorial_url && (
+                 <a href={siteSettings.gmail_tutorial_url} target="_blank" rel="noopener noreferrer" className="absolute top-0 right-0 z-20 flex items-center gap-1 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 px-3 py-1.5 rounded-full text-xs font-bold transition-colors">
+                   <PlayCircle size={14} /> Tutorial Video
+                 </a>
+               )}
                <div className="w-20 h-20 bg-gradient-to-br from-indigo-500 to-indigo-600 text-white rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-xl shadow-indigo-500/20 transform rotate-3">
                   <PlayCircle size={36} className="-rotate-3" />
                </div>
