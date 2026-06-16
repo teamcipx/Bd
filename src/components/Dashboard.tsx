@@ -1,7 +1,7 @@
 import { User } from '../types';
 import { TASK_LIST } from '../data';
 import { motion, AnimatePresence } from 'motion/react';
-import { LogOut, Wallet, Flame, CheckCircle2, ChevronRight, Menu, Home, Clock, Coins, User as UserIcon, ShieldAlert, X, HelpCircle, Info, Star, Bell, Gift, Send, Crown, Mail, Calendar, Video } from 'lucide-react';
+import { LogOut, Wallet, Flame, CheckCircle2, ChevronRight, Menu, Home, Clock, Coins, User as UserIcon, ShieldAlert, X, HelpCircle, Info, Star, Bell, Gift, Send, Crown, Mail, Calendar, Video, AlertCircle } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { TaskListView } from './TaskListView';
@@ -193,7 +193,6 @@ export function Dashboard({ user, onLogout, setUser }: DashboardProps) {
   useEffect(() => {
     const fetchNotifications = async () => {
       try {
-        await supabase.rpc('auto_process_pending_tasks', { p_user_id: user.id });
         const { data: subs } = await supabase.from('submissions').select('id, status, tasks(title), updated_at').in('status', ['approved', 'rejected']).eq('user_id', user.id).order('updated_at', { ascending: false }).limit(3);
         const { data: recs } = await supabase.from('recharges').select('id, status, offer_details, updated_at').in('status', ['approved', 'rejected']).eq('user_id', user.id).order('updated_at', { ascending: false }).limit(3);
         const { data: custom } = await supabase.from('custom_notifications').select('*').eq('user_id', user.id).order('created_at', { ascending: false });
@@ -278,63 +277,35 @@ export function Dashboard({ user, onLogout, setUser }: DashboardProps) {
   }, [user.lastCheckIn]);
 
   const handleCheckIn = async () => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    let newStreak = user.streak;
-    let newBalance = user.balance;
-    let message = "সফলভাবে চেক-ইন হয়েছে!";
-
-    if (user.lastCheckIn) {
-      const lastDate = new Date(user.lastCheckIn);
-      lastDate.setHours(0, 0, 0, 0);
-      
-      const diffTime = Math.abs(today.getTime() - lastDate.getTime());
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
-
-      if (diffDays === 1) {
-        newStreak += 1;
-      } else if (diffDays > 1) {
-        newStreak = 1;
-      }
-    } else {
-      newStreak = 1;
-    }
-
-    if (newStreak === 7) {
-      newBalance += 100;
-      newStreak = 0; // Reset after bonus
-      message = "🎉 ৭ দিনের স্ট্রাইক! আপনি ১০০ টাকা বোনাস পেয়েছেন!";
-    }
-
-    const lastCheckInStr = new Date().toISOString();
-    const updatedUser = { 
-      ...user, 
-      lastCheckIn: lastCheckInStr,
-      streak: newStreak,
-      balance: newBalance
-    };
-
     setIsUpdating(true);
 
     try {
-      const { error } = await supabase.auth.updateUser({
-        data: {
-          balance: newBalance,
-          streak: newStreak,
-          lastCheckIn: lastCheckInStr,
-        }
-      });
+      const { data, error } = await supabase.rpc('daily_check_in');
       
-      if (!error) {
+      if (!error && data) {
+        const result = data as any;
+        const updatedUser = { 
+          ...user,
+          lastCheckIn: result.lastCheckIn,
+          streak: result.new_streak,
+          balance: result.new_balance
+        };
+
         setUser(updatedUser);
         localStorage.setItem('bdpay_user', JSON.stringify(updatedUser));
         localStorage.setItem('bdpay_registered_user_data', JSON.stringify(updatedUser));
         setCanCheckIn(false);
-        setCheckInMsg(message);
+        setCheckInMsg(result.message);
         setTimeout(() => setCheckInMsg(''), 4000);
       } else {
-        alert("সার্ভারের সাথে চেক-ইন সিঙ্ক করতে ব্যর্থ। দয়া করে আবার চেষ্টা করুন।");
+        console.error(error);
+        if (error?.message?.includes('Already checked in')) {
+           setCanCheckIn(false);
+           setCheckInMsg("ইতিমধ্যে আজকের চেক-ইন সম্পন্ন হয়েছে।");
+           setTimeout(() => setCheckInMsg(''), 4000);
+        } else {
+           alert("সার্ভারের সাথে চেক-ইন সিঙ্ক করতে ব্যর্থ। দয়া করে আবার চেষ্টা করুন।");
+        }
       }
     } catch (e) {
       console.error(e);

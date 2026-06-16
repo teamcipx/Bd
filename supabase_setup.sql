@@ -197,6 +197,9 @@ CREATE TABLE IF NOT EXISTS user_profiles (
 ALTER TABLE user_profiles DISABLE ROW LEVEL SECURITY;
 ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS number TEXT;
 ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS is_pro BOOLEAN DEFAULT false;
+ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS balance NUMERIC DEFAULT 0;
+ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS streak INTEGER DEFAULT 0;
+ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS last_check_in TIMESTAMP WITH TIME ZONE;
 
 CREATE TABLE IF NOT EXISTS referrals (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -332,36 +335,9 @@ ALTER PUBLICATION supabase_realtime ADD TABLE support_chats, submissions, withdr
 CREATE OR REPLACE FUNCTION auto_process_pending_tasks(
   p_user_id UUID
 ) RETURNS void AS $$
-DECLARE
-  sub RECORD;
-  rand NUMERIC;
-  rand_hour NUMERIC;
 BEGIN
-  FOR sub IN
-    SELECT s.id, t.reward 
-    FROM submissions s
-    JOIN tasks t ON s.task_id = t.id
-    WHERE s.user_id = p_user_id 
-      AND s.status = 'pending'
-      AND t.task_type != 'gmail'
-      AND EXTRACT(EPOCH FROM (NOW() - s.created_at))/3600 >= (1 + random() * 2)
-    FOR UPDATE OF s SKIP LOCKED
-  LOOP
-    rand := random();
-    IF rand <= 0.90 THEN
-      UPDATE submissions SET status = 'approved', updated_at = NOW() WHERE id = sub.id;
-      
-      UPDATE auth.users
-      SET raw_user_meta_data = jsonb_set(
-        COALESCE(raw_user_meta_data, '{}'::jsonb),
-        '{balance}',
-        to_jsonb(COALESCE((raw_user_meta_data->>'balance')::numeric, 0) + sub.reward)
-      )
-      WHERE id = p_user_id;
-    ELSE
-      UPDATE submissions SET status = 'rejected', updated_at = NOW() WHERE id = sub.id;
-    END IF;
-  END LOOP;
+  -- Auto approval disabled
+  RETURN;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
@@ -504,12 +480,175 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 CREATE OR REPLACE FUNCTION admin_update_user_balance(p_user_id UUID, p_amount NUMERIC)
 RETURNS void AS $$
 BEGIN
+  -- We now use user_profiles to track balance
+  UPDATE user_profiles SET balance = balance + p_amount WHERE user_id = p_user_id;
+
+  -- Also update auth.users to keep local user syncs working without logging out in case of legacy reading
   UPDATE auth.users
   SET raw_user_meta_data = jsonb_set(
     COALESCE(raw_user_meta_data, '{}'::jsonb),
     '{balance}',
-    to_jsonb(COALESCE((raw_user_meta_data->>'balance')::numeric, 0) + p_amount)
+    to_jsonb((SELECT balance FROM user_profiles WHERE user_id = p_user_id))
   )
   WHERE id = p_user_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+
+-- Migrate balance to user_profiles
+ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS balance NUMERIC DEFAULT 0;
+ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS streak INTEGER DEFAULT 0;
+ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS last_check_in TIMESTAMP WITH TIME ZONE;
+
+-- Call this ONCE to ensure everyone using balance actually gets their balance into their profiles correctly.
+-- We can execute this right away when SQL is being run.
+UPDATE user_profiles p 
+SET balance = COALESCE((u.raw_user_meta_data->>'balance')::numeric, 0) 
+FROM auth.users u 
+WHERE p.user_id = u.id AND p.balance = 0 AND (u.raw_user_meta_data->>'balance')::numeric > 0;
+
+CREATE OR REPLACE FUNCTION admin_get_user_balance(p_user_id UUID)
+RETURNS NUMERIC AS $$
+DECLARE
+  v_bal NUMERIC;
+BEGIN
+  SELECT balance INTO v_bal FROM user_profiles WHERE user_id = p_user_id;
+  RETURN COALESCE(v_bal, 0);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE OR REPLACE FUNCTION request_withdrawal(p_method TEXT, p_account TEXT, p_amount NUMERIC) RETURNS void AS $$
+DECLARE
+  v_balance NUMERIC;
+BEGIN
+  SELECT balance INTO v_balance FROM user_profiles WHERE user_id = auth.uid();
+  IF v_balance < p_amount THEN RAISE EXCEPTION 'Insufficient balance'; END IF;
+  
+  UPDATE user_profiles SET balance = balance - p_amount WHERE user_id = auth.uid();
+  INSERT INTO withdrawals (user_id, amount, status) VALUES (auth.uid(), p_amount, 'pending_' || p_method || '_' || p_account);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE OR REPLACE FUNCTION process_withdrawal(p_withdrawal_id UUID, p_action TEXT) RETURNS void AS $$
+DECLARE
+  v_user_id UUID; v_amount NUMERIC; v_status TEXT; v_parts TEXT[];
+BEGIN
+  SELECT user_id, amount, status INTO v_user_id, v_amount, v_status FROM withdrawals WHERE id = p_withdrawal_id;
+  IF v_status NOT LIKE 'pending%' THEN RAISE EXCEPTION 'Withdrawal is not pending'; END IF;
+  v_parts := string_to_array(v_status, '_');
+  UPDATE withdrawals SET status = p_action || '_' || COALESCE(v_parts[2], '') || '_' || COALESCE(v_parts[3], '') WHERE id = p_withdrawal_id;
+  IF p_action = 'rejected' THEN
+    UPDATE user_profiles SET balance = balance + v_amount WHERE user_id = v_user_id;
+  END IF;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE OR REPLACE FUNCTION approve_gmail_task(p_task_id UUID, p_user_id UUID, p_reward NUMERIC) RETURNS void AS $$
+BEGIN
+  UPDATE gmail_tasks SET status = 'approved' WHERE id = p_task_id;
+  UPDATE user_profiles SET balance = balance + p_reward WHERE user_id = p_user_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE OR REPLACE FUNCTION auto_process_pending_tasks(p_user_id UUID) RETURNS void AS $$
+BEGIN
+  -- Auto approval disabled
+  RETURN;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE OR REPLACE FUNCTION daily_check_in()
+RETURNS json AS $$
+DECLARE
+  v_last_check_in TIMESTAMP WITH TIME ZONE;
+  v_streak INTEGER;
+  v_balance NUMERIC;
+  v_new_streak INTEGER;
+  v_diff_days INTEGER;
+  v_message TEXT := 'সফলভাবে চেক-ইন হয়েছে!';
+BEGIN
+  SELECT last_check_in, streak, balance INTO v_last_check_in, v_streak, v_balance FROM user_profiles WHERE user_id = auth.uid();
+  IF v_last_check_in IS NOT NULL THEN
+    v_diff_days := CURRENT_DATE - v_last_check_in::date;
+    IF v_diff_days = 0 THEN
+      RAISE EXCEPTION 'Already checked in today';
+    ELSIF v_diff_days = 1 THEN
+      v_new_streak := v_streak + 1;
+    ELSE
+      v_new_streak := 1;
+    END IF;
+  ELSE
+    v_new_streak := 1;
+  END IF;
+
+  IF v_new_streak >= 7 THEN
+    v_balance := v_balance + 100;
+    v_new_streak := 0;
+    v_message := '🎉 ৭ দিনের স্ট্রাইক! আপনি ১০০ টাকা বোনাস পেয়েছেন!';
+  END IF;
+
+  UPDATE user_profiles SET balance = v_balance, streak = v_new_streak, last_check_in = NOW() WHERE user_id = auth.uid();
+
+  RETURN json_build_object('new_balance', v_balance, 'new_streak', v_new_streak, 'lastCheckIn', NOW(), 'message', v_message);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE OR REPLACE FUNCTION ensure_user_profile(p_ref_code TEXT DEFAULT NULL)
+RETURNS void AS $$
+DECLARE
+  v_my_code TEXT;
+  v_referrer_id UUID;
+  v_existing_ref UUID;
+  v_reward NUMERIC := 15;
+BEGIN
+  v_my_code := UPPER(SUBSTRING(auth.uid()::text FROM 1 FOR 8));
+  
+  INSERT INTO user_profiles (user_id, email, name, number, my_referral_code, referred_by_code)
+  SELECT auth.uid(), auth.jwt()->>'email', auth.jwt()->'user_metadata'->>'name', auth.jwt()->'user_metadata'->>'number', v_my_code, p_ref_code
+  WHERE NOT EXISTS (SELECT 1 FROM user_profiles WHERE user_id = auth.uid());
+
+  IF p_ref_code IS NOT NULL AND p_ref_code != '' THEN
+    SELECT user_id INTO v_referrer_id FROM user_profiles WHERE my_referral_code = UPPER(p_ref_code) AND user_id != auth.uid();
+    
+    IF v_referrer_id IS NOT NULL THEN
+      SELECT id INTO v_existing_ref FROM referrals WHERE referred_user_id = auth.uid();
+      
+      IF v_existing_ref IS NULL THEN
+        -- "Reffar hoiye join hole 10 tarikher por 50 taka, er age hole 15 taka"
+        IF NOW() >= '2026-06-10 00:00:00+06'::timestamp THEN
+          v_reward := 50;
+        ELSE
+          v_reward := 15;
+        END IF;
+
+        INSERT INTO referrals (referrer_id, referred_user_id, reward_amount) VALUES (v_referrer_id, auth.uid(), v_reward);
+        UPDATE user_profiles SET total_referrals = total_referrals + 1, balance = balance + v_reward WHERE user_id = v_referrer_id;
+        
+        -- Bonus for joining by referral
+        UPDATE user_profiles SET balance = balance + 50 WHERE user_id = auth.uid();
+
+      END IF;
+    END IF;
+  END IF;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE OR REPLACE FUNCTION claim_referral_bonus(p_milestone INTEGER, p_bonus NUMERIC)
+RETURNS boolean AS $$
+DECLARE
+  v_profile user_profiles;
+BEGIN
+  SELECT * INTO v_profile FROM user_profiles WHERE user_id = auth.uid();
+  
+  IF v_profile.total_referrals >= p_milestone THEN
+    IF NOT (v_profile.bonuses_claimed ? p_milestone::text) THEN
+      UPDATE user_profiles 
+      SET bonuses_claimed = bonuses_claimed || jsonb_build_array(p_milestone::text), balance = balance + p_bonus
+      WHERE user_id = auth.uid();
+      RETURN true;
+    END IF;
+  END IF;
+  
+  RETURN false;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;

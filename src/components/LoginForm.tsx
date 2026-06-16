@@ -37,19 +37,26 @@ export function LoginForm({ onLogin, onSwitchToSignup }: LoginFormProps) {
 
       if (data?.user) {
         // Read custom user data from Supabase user_metadata
-        const metadata = data.user.user_metadata || {};
+        let metadata = data.user.user_metadata || {};
+        
+        // Fetch secure profile data
+        const { data: profile } = await supabase.from('user_profiles').select('*').eq('user_id', data.user.id).single();
+        if (profile) {
+          metadata = { ...metadata, balance: profile.balance || 0, streak: profile.streak || 0, lastCheckIn: profile.last_check_in, isPro: profile.is_pro };
+        }
         
         const loggedInUser: User = {
           id: data.user.id,
           name: metadata.name || 'User',
-          number: metadata.number || '',
+          number: profile?.number || metadata.number || '',
           gmail: data.user.email || '',
           pass: pass, // We wouldn't normally store plain password in a real app, keeping it for compatibility
-          referralCode: metadata.referralCode || '',
+          referralCode: metadata.referralCode || profile?.my_referral_code || '',
           balance: metadata.balance || 0,
           streak: metadata.streak || 0,
-          joinedAt: metadata.joinedAt || new Date().toISOString(),
+          joinedAt: metadata.joinedAt || data.user.created_at || new Date().toISOString(),
           lastCheckIn: metadata.lastCheckIn,
+          isPro: metadata.isPro || false
         };
         
         // Also keep local copy synced
