@@ -2,10 +2,23 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { Submission, TaskItem } from '../types';
 import { TASK_LIST } from '../data';
-import { ArrowLeft, Check, X, KeySquare, Plus, Trash2 } from 'lucide-react';
+import { ArrowLeft, Check, X, KeySquare, Plus, Trash2, Clock } from 'lucide-react';
 import { motion } from 'motion/react';
 import { AdminInbox } from './AdminInbox';
 import { AdminUserDetail } from './AdminUserDetail';
+
+const formatTimeAgo = (dateString: string) => {
+  if (!dateString) return '';
+  const seconds = Math.floor((new Date().getTime() - new Date(dateString).getTime()) / 1000);
+  
+  if (seconds < 60) return `${seconds}s ago`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ${minutes % 60}m ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ${hours % 24}h ago`;
+};
 
 export function AdminPanel({ onBack }: { onBack: () => void }) {
   const [tab, setTab] = useState<'home' | 'submissions' | 'users' | 'tasks' | 'keys' | 'recharges' | 'gmail' | 'offers' | 'notify' | 'settings' | 'inbox' | 'withdrawals'>('home');
@@ -48,7 +61,14 @@ export function AdminPanel({ onBack }: { onBack: () => void }) {
   });
 
   const [users, setUsers] = useState<any[]>([]);
-  const [stats, setStats] = useState({ totalUsers: 0, todayUsers: 0, todayTasks: 0 });
+  const [stats, setStats] = useState({ 
+    totalUsers: 0, 
+    todayUsers: 0, 
+    todayTasks: 0,
+    totalVIPs: 0,
+    todayVIPs: 0,
+    todayRechargeAmount: 0 
+  });
 
   useEffect(() => {
     if (tab === 'home') loadStats();
@@ -160,10 +180,40 @@ export function AdminPanel({ onBack }: { onBack: () => void }) {
     // Today tasks submitted
     const { count: todayTasks } = await supabase.from('submissions').select('*', { count: 'exact', head: true }).gte('created_at', today);
     
+    // Total VIPs
+    const { count: totalVIPs } = await supabase.from('user_profiles').select('*', { count: 'exact', head: true }).eq('is_pro', true);
+
+    // Today's Approved VIPs and Total Approved Recharges amount
+    const { data: todayRecharges } = await supabase
+      .from('recharges')
+      .select('amount, offer_details, created_at, updated_at')
+      .eq('status', 'approved');
+
+    let todayVIPs = 0;
+    let todayRechargeAmount = 0;
+
+    const todayDateObj = new Date(today);
+
+    if (todayRecharges) {
+      for (const rec of todayRecharges) {
+        // Use updated_at if available, else created_at
+        const dateToCheck = rec.updated_at ? new Date(rec.updated_at) : new Date(rec.created_at);
+        if (dateToCheck >= todayDateObj) {
+          todayRechargeAmount += Number(rec.amount) || 0;
+          if (rec.offer_details === 'BD Pro Lifetime Access') {
+            todayVIPs += 1;
+          }
+        }
+      }
+    }
+    
     setStats({ 
       totalUsers: totalUsers || 0, 
       todayUsers: todayUsers || 0, 
-      todayTasks: todayTasks || 0 
+      todayTasks: todayTasks || 0,
+      totalVIPs: totalVIPs || 0,
+      todayVIPs,
+      todayRechargeAmount
     });
     setLoading(false);
   };
@@ -326,7 +376,7 @@ export function AdminPanel({ onBack }: { onBack: () => void }) {
   };
 
   const handleRechargeAction = async (rec: any, action: 'approved' | 'rejected') => {
-    await supabase.from('recharges').update({ status: action }).eq('id', rec.id);
+    await supabase.from('recharges').update({ status: action, updated_at: new Date().toISOString() }).eq('id', rec.id);
     
     // If it's a BD Pro Lifetime Access recharge, update user_profiles
     if (action === 'approved' && rec.offer_details === 'BD Pro Lifetime Access') {
@@ -609,6 +659,18 @@ export function AdminPanel({ onBack }: { onBack: () => void }) {
                 <span className="text-3xl font-black text-emerald-600 mb-1">{loading ? '...' : stats.todayUsers}</span>
                 <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">Today Users</span>
               </div>
+              <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center text-center">
+                <span className="text-3xl font-black text-amber-500 mb-1">{loading ? '...' : stats.totalVIPs}</span>
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">Total VIP</span>
+              </div>
+              <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center text-center">
+                <span className="text-3xl font-black text-amber-600 mb-1">{loading ? '...' : stats.todayVIPs}</span>
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">Today VIP</span>
+              </div>
+              <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center text-center col-span-2">
+                <span className="text-3xl font-black text-blue-600 mb-1">{loading ? '...' : `৳${stats.todayRechargeAmount}`}</span>
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">Today Approved Recharge</span>
+              </div>
               <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center text-center col-span-2">
                 <span className="text-3xl font-black text-purple-600 mb-1">{loading ? '...' : stats.todayTasks}</span>
                 <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">Today Task Submissions</span>
@@ -701,7 +763,10 @@ export function AdminPanel({ onBack }: { onBack: () => void }) {
                 <div className="flex justify-between items-start">
                   <div>
                     <h3 className="font-bold text-slate-800">{sub.tasks?.title || 'Unknown Task'}</h3>
-                    <p className="text-xs text-slate-500">Reward: ৳{sub.tasks?.reward}</p>
+                    <div className="flex gap-2 items-center text-xs">
+                      <span className="text-slate-500">Reward: ৳{sub.tasks?.reward}</span>
+                      <span className="bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-bold">{formatTimeAgo(sub.created_at)}</span>
+                    </div>
                     {sub.user_profile ? (
                       <p className="text-xs text-slate-600 mt-1 font-medium flex flex-wrap items-center gap-2">
                         <span>User: {sub.user_profile.name}</span>
@@ -898,19 +963,28 @@ export function AdminPanel({ onBack }: { onBack: () => void }) {
                   </div>
                   
                   {task.status === 'submitted' && task.locked_by && (
-                    <div className="flex gap-2 pt-3 border-t border-slate-100 mt-1">
-                      <button 
-                        onClick={() => handleApproveGmailTask(task.id, task.locked_by, task.reward)}
-                        className="flex-1 bg-emerald-50 text-emerald-600 py-2 rounded-xl text-sm font-bold hover:bg-emerald-100 transition-colors"
-                      >
-                        Approve & Pay (৳{task.reward})
-                      </button>
-                      <button 
-                        onClick={() => handleRejectGmailTask(task.id)}
-                        className="flex-1 bg-red-50 text-red-600 py-2 rounded-xl text-sm font-bold hover:bg-red-100 transition-colors"
-                      >
-                        Reject & Unlock
-                      </button>
+                    <div className="flex flex-col gap-2 pt-3 border-t border-slate-100 mt-1">
+                      <div className="text-xs text-slate-500 font-bold mb-1 flex items-center justify-between">
+                         <span className="flex items-center gap-1">
+                            <Clock size={12} />
+                            Submitted: {formatTimeAgo(task.updated_at || task.locked_at || task.created_at)}
+                         </span>
+                         <span className="bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded">Pending Approval</span>
+                      </div>
+                      <div className="flex gap-2">
+                        <button 
+                          onClick={() => handleApproveGmailTask(task.id, task.locked_by, task.reward)}
+                          className="flex-1 bg-emerald-50 text-emerald-600 py-2 rounded-xl text-sm font-bold hover:bg-emerald-100 transition-colors"
+                        >
+                          Approve & Pay (৳{task.reward})
+                        </button>
+                        <button 
+                          onClick={() => handleRejectGmailTask(task.id)}
+                          className="flex-1 bg-red-50 text-red-600 py-2 rounded-xl text-sm font-bold hover:bg-red-100 transition-colors"
+                        >
+                          Reject & Unlock
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>

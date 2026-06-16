@@ -70,7 +70,8 @@ CREATE TABLE IF NOT EXISTS recharges (
   offer_details TEXT,
   trx_id TEXT NOT NULL,
   status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS withdrawals (
@@ -324,6 +325,7 @@ WHERE number IS NULL;
 ALTER TABLE device_fingerprints DISABLE ROW LEVEL SECURITY;
 
 ALTER TABLE submissions ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();
+ALTER TABLE recharges ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();
 
 -- Enable Realtime
 BEGIN;
