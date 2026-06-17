@@ -601,7 +601,8 @@ DECLARE
   v_my_code TEXT;
   v_referrer_id UUID;
   v_existing_ref UUID;
-  v_reward NUMERIC := 15;
+  v_referrer_reward NUMERIC := 15;
+  v_new_user_bonus NUMERIC := 50;
 BEGIN
   v_my_code := UPPER(SUBSTRING(auth.uid()::text FROM 1 FOR 8));
   
@@ -616,34 +617,30 @@ BEGIN
       SELECT id INTO v_existing_ref FROM referrals WHERE referred_user_id = auth.uid();
       
       IF v_existing_ref IS NULL THEN
-        -- "Reffar hoiye join hole 10 tarikher por 50 taka, er age hole 15 taka"
-        IF NOW() >= '2026-06-10 00:00:00+06'::timestamp THEN
-          v_reward := 50;
-        ELSE
-          v_reward := 15;
-        END IF;
-
-        INSERT INTO referrals (referrer_id, referred_user_id, reward_amount) VALUES (v_referrer_id, auth.uid(), v_reward);
-        UPDATE user_profiles SET total_referrals = total_referrals + 1, balance = balance + v_reward WHERE user_id = v_referrer_id;
+        -- Insert referral record
+        INSERT INTO referrals (referrer_id, referred_user_id, reward_amount) VALUES (v_referrer_id, auth.uid(), v_referrer_reward);
+        
+        -- Reward referrer 15 tk
+        UPDATE user_profiles SET total_referrals = total_referrals + 1, balance = balance + v_referrer_reward WHERE user_id = v_referrer_id;
         
         -- Sync referrer balance to auth
         UPDATE auth.users
         SET raw_user_meta_data = jsonb_set(
           COALESCE(raw_user_meta_data, '{}'::jsonb),
           '{balance}',
-          to_jsonb(COALESCE((raw_user_meta_data->>'balance')::numeric, 0) + v_reward)
+          to_jsonb(COALESCE((raw_user_meta_data->>'balance')::numeric, 0) + v_referrer_reward)
         )
         WHERE id = v_referrer_id;
         
-        -- Bonus for joining by referral
-        UPDATE user_profiles SET balance = balance + 50 WHERE user_id = auth.uid();
+        -- Bonus for joining by referral 50 tk
+        UPDATE user_profiles SET balance = balance + v_new_user_bonus WHERE user_id = auth.uid();
         
         -- Sync referred user balance to auth
         UPDATE auth.users
         SET raw_user_meta_data = jsonb_set(
           COALESCE(raw_user_meta_data, '{}'::jsonb),
           '{balance}',
-          to_jsonb(COALESCE((raw_user_meta_data->>'balance')::numeric, 0) + 50)
+          to_jsonb(COALESCE((raw_user_meta_data->>'balance')::numeric, 0) + v_new_user_bonus)
         )
         WHERE id = auth.uid();
 

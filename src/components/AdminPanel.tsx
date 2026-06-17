@@ -402,7 +402,8 @@ export function AdminPanel({ onBack }: { onBack: () => void }) {
     const { data: subsData } = await supabase
       .from('submissions')
       .select('*, tasks(*)')
-      .eq('status', 'pending');
+      .eq('status', 'pending')
+      .order('created_at', { ascending: true });
     
     if (subsData && subsData.length > 0) {
       const userIds = [...new Set(subsData.map(s => s.user_id).filter(Boolean))];
