@@ -140,8 +140,10 @@ export function KYCView({ user, onBack }: KYCViewProps) {
             </div>
 
             <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 mb-4 text-center">
-              <p className="text-sm text-slate-500 mb-1">Send Money To</p>
-              <p className="text-xl font-black text-slate-800 tracking-wider">01728342415</p>
+              <p className="text-sm text-slate-500 mb-1">Send Money To ({method.toUpperCase()})</p>
+              <p className="text-xl font-black text-slate-800 tracking-wider">
+                {method === 'bkash' ? '01624175616' : '01912107604'}
+              </p>
               <p className="text-xs text-slate-400 mt-1">Amount: 50 BDT</p>
             </div>
 
