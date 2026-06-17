@@ -67,7 +67,8 @@ export function AdminPanel({ onBack }: { onBack: () => void }) {
     todayTasks: 0,
     totalVIPs: 0,
     todayVIPs: 0,
-    todayRechargeAmount: 0 
+    todayRechargeAmount: 0,
+    approvedKYCs: 0
   });
 
   useEffect(() => {
@@ -183,6 +184,9 @@ export function AdminPanel({ onBack }: { onBack: () => void }) {
     // Total VIPs
     const { count: totalVIPs } = await supabase.from('user_profiles').select('*', { count: 'exact', head: true }).eq('is_pro', true);
 
+    // Total Approved KYCs
+    const { count: approvedKYCs } = await supabase.from('user_profiles').select('*', { count: 'exact', head: true }).eq('is_kyc_verified', true);
+
     // Today's Approved VIPs and Total Approved Recharges amount
     const { data: todayRecharges } = await supabase
       .from('recharges')
@@ -213,7 +217,8 @@ export function AdminPanel({ onBack }: { onBack: () => void }) {
       todayTasks: todayTasks || 0,
       totalVIPs: totalVIPs || 0,
       todayVIPs,
-      todayRechargeAmount
+      todayRechargeAmount,
+      approvedKYCs: approvedKYCs || 0
     });
     setLoading(false);
   };
@@ -671,9 +676,13 @@ export function AdminPanel({ onBack }: { onBack: () => void }) {
                 <span className="text-3xl font-black text-blue-600 mb-1">{loading ? '...' : `৳${stats.todayRechargeAmount}`}</span>
                 <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">Today Approved Recharge</span>
               </div>
-              <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center text-center col-span-2">
+              <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center text-center">
+                <span className="text-3xl font-black text-emerald-500 mb-1">{loading ? '...' : stats.approvedKYCs}</span>
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">Total Approved KYC</span>
+              </div>
+              <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center text-center">
                 <span className="text-3xl font-black text-purple-600 mb-1">{loading ? '...' : stats.todayTasks}</span>
-                <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">Today Task Submissions</span>
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">Today Proof Submissions</span>
               </div>
             </div>
           </div>

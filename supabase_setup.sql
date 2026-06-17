@@ -626,8 +626,26 @@ BEGIN
         INSERT INTO referrals (referrer_id, referred_user_id, reward_amount) VALUES (v_referrer_id, auth.uid(), v_reward);
         UPDATE user_profiles SET total_referrals = total_referrals + 1, balance = balance + v_reward WHERE user_id = v_referrer_id;
         
+        -- Sync referrer balance to auth
+        UPDATE auth.users
+        SET raw_user_meta_data = jsonb_set(
+          COALESCE(raw_user_meta_data, '{}'::jsonb),
+          '{balance}',
+          to_jsonb(COALESCE((raw_user_meta_data->>'balance')::numeric, 0) + v_reward)
+        )
+        WHERE id = v_referrer_id;
+        
         -- Bonus for joining by referral
         UPDATE user_profiles SET balance = balance + 50 WHERE user_id = auth.uid();
+        
+        -- Sync referred user balance to auth
+        UPDATE auth.users
+        SET raw_user_meta_data = jsonb_set(
+          COALESCE(raw_user_meta_data, '{}'::jsonb),
+          '{balance}',
+          to_jsonb(COALESCE((raw_user_meta_data->>'balance')::numeric, 0) + 50)
+        )
+        WHERE id = auth.uid();
 
       END IF;
     END IF;
