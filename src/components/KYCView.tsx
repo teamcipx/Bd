@@ -1,17 +1,19 @@
 import { User } from '../types';
 import { motion } from 'motion/react';
 import { supabase } from '../lib/supabase';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ArrowLeft, ShieldCheck, CreditCard, CheckCircle2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 interface KYCViewProps {
-  user: User;
+  user: any;
   onBack: () => void;
 }
 
 export function KYCView({ user, onBack }: KYCViewProps) {
   const [step, setStep] = useState<1 | 2>(1);
+  const [hasPending, setHasPending] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
   
   // Form fields (just for show)
   const [name, setName] = useState(user.name);
@@ -22,6 +24,28 @@ export function KYCView({ user, onBack }: KYCViewProps) {
   const [trxId, setTrxId] = useState('');
   const [method, setMethod] = useState('bkash'); // bkash, nagad
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const checkPending = async () => {
+      try {
+        const { data } = await supabase
+          .from('recharges')
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('offer_details', 'KYC Verification')
+          .eq('status', 'pending');
+        
+        if (data && data.length > 0) {
+          setHasPending(true);
+        }
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setInitialLoading(false);
+      }
+    };
+    checkPending();
+  }, [user.id]);
 
   const handleContinue = (e: React.FormEvent) => {
     e.preventDefault();
@@ -63,6 +87,45 @@ export function KYCView({ user, onBack }: KYCViewProps) {
       setLoading(false);
     }
   };
+
+  if (initialLoading) {
+    return (
+      <div className="flex justify-center items-center h-48">
+        <div className="w-8 h-8 border-4 border-emerald-200 border-t-emerald-600 rounded-full animate-spin"></div>
+      </div>
+    );
+  }
+
+  if (hasPending) {
+    return (
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="pb-24">
+        <div className="bg-emerald-600 px-4 py-4 sticky top-0 z-20 shadow-sm flex items-center gap-3 text-white">
+          <button onClick={onBack} className="p-2 hover:bg-black/10 rounded-lg transition-colors">
+            <ArrowLeft size={24} />
+          </button>
+          <h1 className="text-xl font-bold">KYC Verification</h1>
+        </div>
+
+        <div className="p-8 space-y-4 mt-8">
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center text-center">
+            <div className="w-20 h-20 bg-amber-50 text-amber-500 rounded-full flex items-center justify-center mb-4">
+              <CheckCircle2 size={40} />
+            </div>
+            <h2 className="text-xl font-black text-slate-800 mb-2">Review Pending</h2>
+            <p className="text-sm text-slate-500 leading-relaxed mb-6">
+              আপনার KYC ভেরিফিকেশন রিকোয়েস্টটি রিভিউ এর জন্য অপেক্ষমান রয়েছে। দয়া করে অপেক্ষা করুন।
+            </p>
+            <button 
+              onClick={onBack} 
+              className="px-8 py-3 bg-slate-100 text-slate-700 font-bold rounded-xl hover:bg-slate-200 transition-colors"
+            >
+              ফিরে যান
+            </button>
+          </div>
+        </div>
+      </motion.div>
+    );
+  }
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="pb-24">
